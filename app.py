@@ -15,21 +15,18 @@ app.secret_key = os.urandom(24)
 # --- Configuration ---
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-# Configure the database connection using the URL from Render's environment variables
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# --- Create Application Directories (for local file uploads) ---
+# --- Create Application Directories ---
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # --- Password Management ---
 MASTER_PASSWORD_HASH = os.getenv('MASTER_PASSWORD_HASH')
-VIEWER_PASSWORD_HASH = os.getenv('VIEWER_PASSWORD_HASH')
 
-# --- Database Models (Defines the structure of our tables) ---
+# --- Database Models ---
 class Passwords(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
@@ -53,14 +50,9 @@ class AnimeEpisodes(db.Model):
     series_id = db.Column(db.Integer, db.ForeignKey('anime_series.id'), nullable=False)
 
 # --- Encryption ---
-# This part remains the same, but the key should be an environment variable on Render
-# For simplicity in deployment, we will generate it if not present.
 key_str = os.getenv('FERNET_KEY')
 if not key_str:
     key_str = Fernet.generate_key().decode()
-    print("WARNING: No FERNET_KEY found. Generating a new one. Add this to your environment variables for persistence.")
-    print(f"FERNET_KEY={key_str}")
-
 fernet = Fernet(key_str.encode())
 
 def encrypt_data(data):
@@ -69,76 +61,75 @@ def encrypt_data(data):
 def decrypt_data(encrypted_data):
     return fernet.decrypt(encrypted_data.encode()).decode()
 
-# --- User Access Control Decorators ---
+# --- User Access Control ---
 from functools import wraps
 
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'level' not in session:
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
+@app.before_request
+def set_default_access_level():
+    # If the user isn't logged in as master, treat them as a viewer.
+    if 'level' not in session:
+        session['level'] = 'viewer'
 
 def master_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if session.get('level') != 'master':
-            flash("You do not have permission to perform this action.", "danger")
-            return redirect(url_for('files'))
+            flash("You must be an administrator to access this page.", "danger")
+            return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
 
-# --- Authentication Routes ---
-@app.route("/", methods=["GET", "POST"])
+# --- Routes ---
+@app.route("/")
+def index():
+    # The homepage now redirects to the anime library
+    return redirect(url_for('anime'))
+
+@app.route("/login", methods=["GET", "POST"])
 def login():
-    if 'level' in session:
-        return redirect(url_for('files'))
+    if session['level'] == 'master':
+        return redirect(url_for('anime'))
 
     if request.method == "POST":
         password = request.form["password"]
         if MASTER_PASSWORD_HASH and check_password_hash(MASTER_PASSWORD_HASH, password):
             session['level'] = 'master'
-            return redirect(url_for('files'))
-        if VIEWER_PASSWORD_HASH and check_password_hash(VIEWER_PASSWORD_HASH, password):
-            session['level'] = 'viewer'
-            return redirect(url_for('files'))
-        
-        flash("Invalid password.", "danger")
+            flash("Login successful. You now have admin privileges.", "success")
+            return redirect(url_for('anime'))
+        else:
+            flash("Invalid password.", "danger")
 
     return render_template("login.html")
 
 @app.route("/logout")
 def logout():
-    session.clear()
+    # Logging out resets the session to viewer
+    session.pop('level', None)
     flash("You have been logged out.", "success")
-    return redirect(url_for("login"))
+    return redirect(url_for("anime"))
 
-# --- Main Page Routes ---
+# --- Public Page Routes ---
 @app.route("/files")
-@login_required
 def files():
     file_list = os.listdir(app.config['UPLOAD_FOLDER'])
     return render_template("files.html", files=file_list)
 
 @app.route("/videos")
-@login_required
 def videos():
     video_list = Videos.query.order_by(Videos.title).all()
     return render_template("videos.html", videos=video_list)
 
 @app.route("/anime")
-@login_required
 def anime():
     series_list = AnimeSeries.query.order_by(AnimeSeries.title).all()
     return render_template("anime.html", series_list=series_list)
 
 @app.route("/anime/series/<int:series_id>")
-@login_required
 def anime_series_details(series_id):
     series = AnimeSeries.query.get_or_404(series_id)
     return render_template("anime_details.html", series=series, episodes=series.episodes)
 
+# --- Master-Only Routes ---
 @app.route("/vault")
 @master_required
 def vault():
@@ -152,17 +143,14 @@ def vault():
             passwords.append({'id': p.id, 'name': p.name, 'password': '*** DECRYPTION ERROR ***'})
     return render_template("vault.html", passwords=passwords)
 
-# --- All 'add' and 'delete' actions ---
+# --- All 'add' and 'delete' actions (all require master access) ---
 @app.route("/vault/add", methods=["POST"])
 @master_required
 def add_password():
-    new_password = Passwords(
-        name=request.form['name'],
-        encrypted_password=encrypt_data(request.form['password'])
-    )
+    new_password = Passwords(name=request.form['name'], encrypted_password=encrypt_data(request.form['password']))
     db.session.add(new_password)
     db.session.commit()
-    flash(f"Password for '{request.form['name']}' added successfully.", "success")
+    flash(f"Password for '{request.form['name']}' added.", "success")
     return redirect(url_for("vault"))
 
 @app.route("/vault/delete/<int:id>", methods=["POST"])
@@ -171,7 +159,7 @@ def delete_password(id):
     password_to_delete = Passwords.query.get_or_404(id)
     db.session.delete(password_to_delete)
     db.session.commit()
-    flash("Password deleted successfully.", "success")
+    flash("Password deleted.", "success")
     return redirect(url_for("vault"))
 
 @app.route("/upload/file", methods=["POST"])
@@ -185,7 +173,6 @@ def upload_file():
     return jsonify({"success": f"File '{filename}' uploaded"}), 200
 
 @app.route("/download/file/<filename>")
-@login_required
 def download_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
@@ -202,7 +189,7 @@ def add_video():
     new_video = Videos(title=request.form['title'], url=request.form['url'])
     db.session.add(new_video)
     db.session.commit()
-    flash(f"Video '{request.form['title']}' added successfully.", "success")
+    flash(f"Video '{request.form['title']}' added.", "success")
     return redirect(url_for("videos"))
 
 @app.route("/videos/delete/<int:id>", methods=["POST"])
@@ -211,7 +198,7 @@ def delete_video(id):
     video_to_delete = Videos.query.get_or_404(id)
     db.session.delete(video_to_delete)
     db.session.commit()
-    flash("Video deleted successfully.", "success")
+    flash("Video deleted.", "success")
     return redirect(url_for("videos"))
 
 @app.route("/anime/series/add", methods=["POST"])
@@ -220,7 +207,7 @@ def add_anime_series():
     new_series = AnimeSeries(title=request.form['title'], image_url=request.form['image_url'])
     db.session.add(new_series)
     db.session.commit()
-    flash(f"Series '{request.form['title']}' added successfully.", "success")
+    flash(f"Series '{request.form['title']}' added.", "success")
     return redirect(url_for("anime"))
 
 @app.route("/anime/series/delete/<int:id>", methods=["POST"])
@@ -229,20 +216,16 @@ def delete_anime_series(id):
     series_to_delete = AnimeSeries.query.get_or_404(id)
     db.session.delete(series_to_delete)
     db.session.commit()
-    flash("Series and all its episodes have been deleted.", "success")
+    flash("Series and all its episodes deleted.", "success")
     return redirect(url_for("anime"))
 
 @app.route("/anime/episode/add/<int:series_id>", methods=["POST"])
 @master_required
 def add_anime_episode(series_id):
-    new_episode = AnimeEpisodes(
-        title=request.form['title'],
-        url=request.form['url'],
-        series_id=series_id
-    )
+    new_episode = AnimeEpisodes(title=request.form['title'], url=request.form['url'], series_id=series_id)
     db.session.add(new_episode)
     db.session.commit()
-    flash(f"Episode '{request.form['title']}' added successfully.", "success")
+    flash(f"Episode '{request.form['title']}' added.", "success")
     return redirect(url_for("anime_series_details", series_id=series_id))
 
 @app.route("/anime/episode/delete/<int:id>", methods=["POST"])
@@ -252,7 +235,7 @@ def delete_anime_episode(id):
     series_id = episode_to_delete.series_id
     db.session.delete(episode_to_delete)
     db.session.commit()
-    flash("Episode deleted successfully.", "success")
+    flash("Episode deleted.", "success")
     return redirect(url_for("anime_series_details", series_id=series_id))
 
 # --- Create database tables if they don't exist ---
