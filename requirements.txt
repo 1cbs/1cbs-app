@@ -3,3 +3,5 @@ cryptography
 python-dotenv
 werkzeug
 gunicorn
+flask_sqlalchemy
+psycopg2-binary
