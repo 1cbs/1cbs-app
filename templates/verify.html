@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1cbs - Verify Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body>
+    <!-- Animated Star Background -->
+    <div id="star-background"></div>
+
+    <div class="container">
+        <div class="login-container">
+            <div class="card glass-effect">
+                <div class="card-content">
+                    <div class="login-header">
+                        <h2><i class="fas fa-shield-alt"></i> Check Your Email</h2>
+                        <p>A 6-digit code was sent to<br><strong>{{ email }}</strong></p>
+                    </div>
+
+                    <!-- Flash Messages -->
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            <div class="flash-messages">
+                            {% for category, message in messages %}
+                                <div class="flash {{ category }}">{{ message }}</div>
+                            {% endfor %}
+                            </div>
+                        {% endif %}
+                    {% endwith %}
+
+                    <form action="{{ url_for('verify') }}" method="POST">
+                        <div class="form-group">
+                            <label for="code">Enter Code</label>
+                            <input type="text" id="code" name="code" pattern="\d{6}" maxlength="6" inputmode="numeric" required>
+                        </div>
+                        <button type="submit" class="btn-primary btn-full-width">Verify & Login</button>
+                    </form>
+                    <div class="back-link">
+                        <a href="{{ url_for('login') }}">Use a different email</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- We need the JS for the star background -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <style>
+        /* Additional styles for centering the login form */
+        .login-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 80vh;
+        }
+        .login-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .login-header h2 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            color: var(--primary-color);
+        }
+        .login-header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+        .btn-full-width {
+            width: 100%;
+            padding: 0.8rem;
+            font-size: 1.1rem;
+        }
+        #code {
+            text-align: center;
+            font-size: 1.5rem;
+            letter-spacing: 0.5em;
+        }
+        .back-link {
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+        .back-link a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        .back-link a:hover {
+            color: var(--primary-color);
+        }
+    </style>
+</body>
+</html>

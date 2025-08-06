@@ -1,0 +1,339 @@
+/* --- Global Styles & Variables --- */
+:root {
+    --primary-color: #00aaff;
+    --background-color: #0c0c1e;
+    --card-background: rgba(20, 20, 40, 0.6);
+    --text-color: #e0e0e0;
+    --text-secondary: #a0a0c0;
+    --border-color: rgba(0, 170, 255, 0.3);
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #17a2b8;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    line-height: 1.6;
+    overflow-x: hidden;
+}
+
+/* --- Animated Star Background --- */
+#star-background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    background: var(--background-color);
+    /* JS will populate this with stars */
+}
+
+.star {
+    position: absolute;
+    background-color: white;
+    border-radius: 50%;
+    animation: twinkle 5s infinite;
+}
+
+@keyframes twinkle {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+/* --- Main Layout & Header --- */
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem;
+    position: relative;
+    z-index: 1;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 2rem;
+}
+
+header h1 {
+    font-size: 2.5rem;
+    color: var(--primary-color);
+    text-shadow: 0 0 10px var(--primary-color);
+}
+
+.logout-btn {
+    background: var(--danger-color);
+    color: white;
+    padding: 0.7rem 1.2rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.logout-btn:hover {
+    box-shadow: 0 0 15px var(--danger-color);
+    transform: translateY(-2px);
+}
+
+/* --- Card & Glass Effect --- */
+.card {
+    background: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 15px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2), 0 0 20px var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.card-header h2 {
+    color: var(--primary-color);
+}
+
+.card-header h2 i {
+    margin-right: 0.5rem;
+}
+
+/* --- Dashboard Grid --- */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 2rem;
+}
+
+/* --- Item Lists (Files, Videos, Passwords) --- */
+.item-list {
+    list-style: none;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 10px; /* For scrollbar */
+}
+
+.item-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.8rem;
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    transition: background 0.3s ease;
+}
+
+.item-list li:hover {
+    background: rgba(0, 170, 255, 0.1);
+}
+
+.item-name {
+    word-break: break-all;
+    margin-right: 1rem;
+}
+
+.item-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* --- Password Vault Specifics --- */
+.password-item {
+    flex-wrap: wrap;
+}
+.password-field {
+    display: flex;
+    align-items: center;
+    background: rgba(0,0,0,0.3);
+    border-radius: 5px;
+    padding: 0 5px;
+    margin: 5px 0;
+}
+.password-field input {
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    padding: 8px;
+    outline: none;
+    font-family: monospace;
+}
+
+/* --- Buttons --- */
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    box-shadow: 0 0 15px var(--primary-color);
+    transform: translateY(-2px);
+}
+
+.btn-icon {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 1.2rem;
+    transition: color 0.3s ease;
+}
+
+.btn-icon:hover {
+    color: var(--primary-color);
+}
+
+.btn-delete:hover {
+    color: var(--danger-color);
+}
+
+/* --- Drag and Drop Zones --- */
+.drop-zone {
+    border: 2px dashed var(--border-color);
+    border-radius: 10px;
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.drop-zone:hover, .drop-zone.dragover {
+    background: rgba(0, 170, 255, 0.1);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+/* --- Modals --- */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.7);
+    backdrop-filter: blur(5px);
+}
+
+.modal-content {
+    position: relative;
+    margin: 10% auto;
+    padding: 2rem;
+    width: 90%;
+    max-width: 500px;
+    animation: slide-in 0.5s ease-out;
+}
+
+.video-modal-content {
+    max-width: 900px;
+}
+
+@keyframes slide-in {
+    from { transform: translateY(-50px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.close-btn {
+    color: #aaa;
+    position: absolute;
+    top: 15px;
+    right: 25px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.3s;
+}
+
+.close-btn:hover, .close-btn:focus {
+    color: var(--primary-color);
+}
+
+/* --- Forms --- */
+.form-group {
+    margin-bottom: 1.5rem;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+}
+.form-group input {
+    width: 100%;
+    padding: 0.8rem;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+.form-group input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 10px var(--primary-color);
+}
+
+/* --- Flash Messages --- */
+.flash-messages {
+    padding-bottom: 1rem;
+}
+.flash {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    color: white;
+    opacity: 0.9;
+}
+.flash.success { background-color: var(--success-color); }
+.flash.danger { background-color: var(--danger-color); }
+.flash.warning { background-color: var(--warning-color); }
+.flash.info { background-color: var(--info-color); }
+
+/* --- Scrollbar --- */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.1);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #0077b3;
+}

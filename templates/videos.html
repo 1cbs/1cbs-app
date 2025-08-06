@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Video Library{% endblock %}
+
+{% block content %}
+<section class="card glass-effect" id="videos">
+    <div class="card-header">
+        <h2><i class="fas fa-video"></i> Video Library</h2>
+        <!-- Master users see a button to open the 'add' modal -->
+        {% if session['level'] == 'master' %}
+        <button class="btn-primary" onclick="openModal('addVideoModal')"><i class="fas fa-plus"></i> Add New Video</button>
+        {% endif %}
+    </div>
+    <div class="card-content">
+        <ul class="item-list">
+            {% for v in videos %}
+            <li>
+                <span class="item-name"><i class="fas fa-film"></i> {{ v.title }}</span>
+                <div class="item-actions">
+                    <!-- The play button now uses the URL from the database -->
+                    <button class="btn-icon" onclick="openModal('videoPlayerModal', '{{ v.url }}')"><i class="fas fa-play"></i></button>
+                    {% if session['level'] == 'master' %}
+                    <!-- The delete form now uses the video's ID -->
+                    <form action="{{ url_for('delete_video', id=v.id) }}" method="POST" style="display: inline;">
+                        <button type="submit" class="btn-icon btn-delete"><i class="fas fa-trash"></i></button>
+                    </form>
+                    {% endif %}
+                </div>
+            </li>
+            {% else %}
+            <li>No videos added yet.</li>
+            {% endfor %}
+        </ul>
+    </div>
+</section>
+
+<!-- Add Video Modal (Master Only) -->
+{% if session['level'] == 'master' %}
+<div id="addVideoModal" class="modal">
+    <div class="modal-content glass-effect">
+        <span class="close-btn" onclick="closeModal('addVideoModal')">&times;</span>
+        <h2>Add New Video</h2>
+        <form action="{{ url_for('add_video') }}" method="POST">
+            <div class="form-group">
+                <label for="video-title">Video Title</label>
+                <input type="text" id="video-title" name="title" required>
+            </div>
+            <div class="form-group">
+                <label for="video-url">Direct Video URL</label>
+                <input type="url" id="video-url" name="url" placeholder="https://f005.backblazeb2.com/..." required>
+            </div>
+            <button type="submit" class="btn-primary">Save Video</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

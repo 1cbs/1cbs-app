@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- The title will be set by each individual page -->
+    <title>1cbs - {% block title %}{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body>
+    <!-- Animated Star Background -->
+    <div id="star-background"></div>
+
+    <!-- Navigation Sidebar -->
+    <nav class="main-nav">
+        <h3>Navigation</h3>
+        <ul>
+            {% if session['level'] == 'master' %}
+            <li><a href="{{ url_for('vault') }}"><i class="fas fa-key"></i> Vault</a></li>
+            {% endif %}
+            <li><a href="{{ url_for('files') }}"><i class="fas fa-folder"></i> Files</a></li>
+            <li><a href="{{ url_for('videos') }}"><i class="fas fa-video"></i> Videos</a></li>
+            <li><a href="{{ url_for('anime') }}"><i class="fas fa-tv"></i> Anime</a></li>
+        </ul>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <button class="menu-btn" id="menu-toggle"><i class="fas fa-bars"></i></button>
+                <h1>1cbs <span class="access-level">({{ session['level']|capitalize }} Access)</span></h1>
+            </div>
+            <a href="{{ url_for('logout') }}" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        </header>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- This is where the content of each individual page will go -->
+        <main>
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <!-- Video Player Modal (All Users) -->
+    <div id="videoPlayerModal" class="modal">
+        <div class="modal-content glass-effect video-modal-content">
+            <span class="close-btn" onclick="closeModal('videoPlayerModal')">&times;</span>
+            <video id="videoPlayer" width="100%" controls autoplay>
+                <source src="" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        // --- Navigation Sidebar Logic ---
+        document.addEventListener('DOMContentLoaded', function() {
+            const menuToggle = document.getElementById('menu-toggle');
+            const mainNav = document.querySelector('.main-nav');
+
+            if (menuToggle) {
+                menuToggle.addEventListener('click', () => {
+                    mainNav.classList.toggle('active');
+                });
+            }
+        });
+    </script>
+    <style>
+        .access-level {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            font-weight: normal;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        .menu-btn {
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            font-size: 1.8rem;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        .menu-btn:hover {
+            transform: scale(1.1);
+        }
+        .main-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 250px;
+            height: 100%;
+            background: var(--card-background);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border-right: 1px solid var(--border-color);
+            transform: translateX(-100%);
+            transition: transform 0.4s ease-in-out;
+            z-index: 2000;
+            padding: 2rem;
+        }
+        .main-nav.active {
+            transform: translateX(0);
+        }
+        .main-nav h3 {
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .main-nav ul {
+            list-style: none;
+        }
+        .main-nav ul li a {
+            display: block;
+            color: var(--text-color);
+            text-decoration: none;
+            padding: 1rem;
+            font-size: 1.1rem;
+            border-radius: 8px;
+            transition: background 0.3s, color 0.3s;
+        }
+        .main-nav ul li a:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+        .main-nav ul li a i {
+            margin-right: 1rem;
+        }
+    </style>
+</body>
+</html>
+```
