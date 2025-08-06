@@ -1,4 +1,5 @@
 Flask
-Flask-Mail
 cryptography
 python-dotenv
+werkzeug
+gunicorn
