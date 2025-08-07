@@ -1,1 +1,135 @@
+{% extends "base.html" %}
 
+{% block title %}Watching: {{ party.video_title }}{% endblock %}
+
+{% block content %}
+<style>
+    .room-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    .video-wrapper {
+        position: relative;
+        padding-bottom: 56.25%; /* 16:9 aspect ratio */
+        height: 0;
+        background: black;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .video-wrapper video {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+    }
+    .room-info {
+        margin-top: 1.5rem;
+        padding: 1rem;
+        background: var(--card-background);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+    }
+    .room-info h2 {
+        margin-bottom: 0.5rem;
+    }
+    .room-info p {
+        color: var(--text-secondary);
+    }
+    .room-info strong {
+        color: var(--primary-color);
+        user-select: all; /* Make it easy to copy */
+    }
+    .status-log {
+        margin-top: 1rem;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        font-style: italic;
+    }
+</style>
+
+<div class="room-container">
+    <div class="video-wrapper">
+        <video id="synced-player" src="{{ party.video_url }}" controls></video>
+    </div>
+
+    <div class="room-info">
+        <h2>{{ party.video_title }}</h2>
+        <p>You are in party: <strong>{{ party.room_code }}</strong>. Share this code with your friends!</p>
+        {% if party.is_leader %}
+        <p>You are the party leader. Your video controls will sync with everyone else.</p>
+        {% else %}
+        <p>The party leader is controlling the video.</p>
+        {% endif %}
+        <div id="status-log" class="status-log">Connecting to party...</div>
+    </div>
+</div>
+
+<!-- Include the Socket.IO client library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const video = document.getElementById('synced-player');
+    const statusLog = document.getElementById('status-log');
+    const roomCode = "{{ party.room_code }}";
+    const isLeader = {{ party.is_leader|tojson }};
+
+    // Connect to the server's WebSocket
+    const socket = io();
+
+    socket.on('connect', () => {
+        console.log('Connected to server!');
+        // Join the specific party room
+        socket.emit('join', { room_code: roomCode });
+        statusLog.textContent = 'Connected! Waiting for others...';
+    });
+
+    socket.on('status', (data) => {
+        console.log('Status update:', data.msg);
+        statusLog.textContent = data.msg;
+    });
+
+    // This is where viewers receive commands from the leader
+    socket.on('player_control', (data) => {
+        if (!isLeader) {
+            console.log('Received command:', data.event);
+            switch(data.event) {
+                case 'play':
+                    video.currentTime = data.time;
+                    video.play();
+                    break;
+                case 'pause':
+                    video.pause();
+                    video.currentTime = data.time;
+                    break;
+                case 'seek':
+                    video.currentTime = data.time;
+                    break;
+            }
+        }
+    });
+
+    // This is where the leader sends commands
+    if (isLeader) {
+        const emitPlayerEvent = (eventName) => {
+            const eventData = {
+                event: eventName,
+                time: video.currentTime,
+                room_code: roomCode
+            };
+            console.log('Sending command:', eventData);
+            socket.emit('player_event', eventData);
+        };
+
+        video.addEventListener('play', () => emitPlayerEvent('play'));
+        video.addEventListener('pause', () => emitPlayerEvent('pause'));
+        video.addEventListener('seeked', () => emitPlayerEvent('seek'));
+    } else {
+        // Viewers cannot control the video directly
+        video.onplaying = (e) => { if (!isLeader) e.preventDefault(); };
+        video.onpause = (e) => { if (!isLeader) e.preventDefault(); };
+        video.onseeked = (e) => { if (!isLeader) e.preventDefault(); };
+    }
+});
+</script>
+{% endblock %}
