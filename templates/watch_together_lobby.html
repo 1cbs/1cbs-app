@@ -9,7 +9,7 @@
         grid-template-columns: 1fr;
         gap: 2rem;
     }
-    @media (min-width: 768px) {
+    @media (min-width: 992px) {
         .lobby-grid {
             grid-template-columns: 2fr 1fr;
         }
@@ -30,6 +30,15 @@
     .party-info .video {
         font-size: 0.9rem;
         color: var(--text-secondary);
+    }
+    .form-group select {
+        width: 100%;
+        padding: 0.8rem;
+        background: rgba(0,0,0,0.3);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        color: var(--text-color);
+        outline: none;
     }
 </style>
 
@@ -57,20 +66,51 @@
         </div>
     </section>
 
-    <!-- Right Column: Join with a Code -->
-    <section class="card glass-effect" id="join-party">
-        <div class="card-header">
-            <h2><i class="fas fa-sign-in-alt"></i> Join with a Code</h2>
+    <!-- Right Column: Join/Create Party -->
+    <aside>
+        <div class="card glass-effect" id="join-party" style="margin-bottom: 2rem;">
+            <div class="card-header">
+                <h2><i class="fas fa-sign-in-alt"></i> Join with a Code</h2>
+            </div>
+            <div class="card-content">
+                <form action="{{ url_for('join_watch_party') }}" method="POST">
+                    <div class="form-group">
+                        <label for="room_code">Party Code</label>
+                        <input type="text" id="room_code" name="room_code" required style="text-transform: uppercase;">
+                    </div>
+                    <button type="submit" class="btn-primary" style="width: 100%;">Join Party</button>
+                </form>
+            </div>
         </div>
-        <div class="card-content">
-            <form action="{{ url_for('join_watch_party') }}" method="POST">
-                <div class="form-group">
-                    <label for="room_code">Party Code</label>
-                    <input type="text" id="room_code" name="room_code" required style="text-transform: uppercase;">
-                </div>
-                <button type="submit" class="btn-primary" style="width: 100%;">Join Party</button>
-            </form>
+        
+        {% if session['level'] == 'master' %}
+        <div class="card glass-effect" id="create-party">
+            <div class="card-header">
+                <h2><i class="fas fa-plus-circle"></i> Create a New Party</h2>
+            </div>
+            <div class="card-content">
+                <form action="{{ url_for('create_watch_party') }}" method="POST">
+                    <div class="form-group">
+                        <label for="video_selection">Choose a video</label>
+                        <select name="video_selection" id="video_selection" required>
+                            <option value="" disabled selected>Select a video to watch...</option>
+                            <optgroup label="Anime">
+                                {% for episode in anime_episodes %}
+                                <option value="anime-{{ episode.id }}">{{ episode.series.title }} - {{ episode.title }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            <optgroup label="Videos">
+                                {% for video in videos %}
+                                <option value="video-{{ video.id }}">{{ video.title }}</option>
+                                {% endfor %}
+                            </optgroup>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn-primary" style="width: 100%;">Start Party</button>
+                </form>
+            </div>
         </div>
-    </section>
+        {% endif %}
+    </aside>
 </div>
 {% endblock %}
