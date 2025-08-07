@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- The title will be set by each individual page -->
     <title>1cbs - {% block title %}{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
@@ -16,6 +15,7 @@
     <nav class="main-nav">
         <h3>Navigation</h3>
         <ul>
+            <!-- The Vault link only shows if you are logged in as master -->
             {% if session['level'] == 'master' %}
             <li><a href="{{ url_for('vault') }}"><i class="fas fa-key"></i> Vault</a></li>
             {% endif %}
@@ -32,7 +32,12 @@
                 <button class="menu-btn" id="menu-toggle"><i class="fas fa-bars"></i></button>
                 <h1>1cbs <span class="access-level">({{ session['level']|capitalize }} Access)</span></h1>
             </div>
-            <a href="{{ url_for('logout') }}" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            <!-- This button now changes based on your access level -->
+            {% if session['level'] == 'master' %}
+                <a href="{{ url_for('logout') }}" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            {% else %}
+                <a href="{{ url_for('login') }}" class="login-btn"><i class="fas fa-sign-in-alt"></i> Admin Login</a>
+            {% endif %}
         </header>
 
         <!-- Flash Messages -->
@@ -46,7 +51,6 @@
             {% endif %}
         {% endwith %}
 
-        <!-- This is where the content of each individual page will go -->
         <main>
             {% block content %}{% endblock %}
         </main>
@@ -78,6 +82,7 @@
         });
     </script>
     <style>
+        /* General Styles */
         .access-level {
             font-size: 1rem;
             color: var(--text-secondary);
@@ -148,7 +153,34 @@
         .main-nav ul li a i {
             margin-right: 1rem;
         }
+        /* New Login Button Style */
+        .login-btn {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.7rem 1.2rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .login-btn:hover {
+            box-shadow: 0 0 15px var(--primary-color);
+            transform: translateY(-2px);
+        }
+        
+        /* Media query for mobile-friendliness */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            .header-left h1 {
+                font-size: 1.5rem;
+            }
+            .main-nav {
+                width: 220px;
+            }
+        }
     </style>
 </body>
 </html>
-```
