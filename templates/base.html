@@ -15,13 +15,17 @@
     <nav class="main-nav">
         <h3>Navigation</h3>
         <ul>
-            {% if session['level'] == 'master' %}
+            <!-- Vault is now only for the master admin -->
+            {% if session.get('username') == config.ADMIN_USERNAME %}
             <li><a href="{{ url_for('vault') }}"><i class="fas fa-key"></i> Vault</a></li>
             {% endif %}
             <li><a href="{{ url_for('files') }}"><i class="fas fa-folder"></i> Files</a></li>
             <li><a href="{{ url_for('videos') }}"><i class="fas fa-video"></i> Videos</a></li>
             <li><a href="{{ url_for('anime') }}"><i class="fas fa-tv"></i> Anime</a></li>
+            <!-- Watch Together is for any logged-in user -->
+            {% if 'user_id' in session %}
             <li><a href="{{ url_for('watch_together_lobby') }}"><i class="fas fa-users"></i> Watch Together</a></li>
+            {% endif %}
         </ul>
     </nav>
 
@@ -30,13 +34,17 @@
         <header>
             <div class="header-left">
                 <button class="menu-btn" id="menu-toggle"><i class="fas fa-bars"></i></button>
-                <h1>1cbs <span class="access-level">({{ session['level']|capitalize }} Access)</span></h1>
+                <h1>1cbs</h1>
             </div>
-            {% if session['level'] == 'master' %}
-                <a href="{{ url_for('logout') }}" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
-            {% else %}
-                <a href="{{ url_for('login') }}" class="login-btn"><i class="fas fa-sign-in-alt"></i> Admin Login</a>
-            {% endif %}
+            <div class="header-right">
+                {% if 'user_id' in session %}
+                    <span class="username-display">Welcome, {{ session.username }}</span>
+                    <a href="{{ url_for('logout') }}" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                {% else %}
+                    <a href="{{ url_for('login') }}" class="login-btn">Login</a>
+                    <a href="{{ url_for('register') }}" class="register-btn">Register</a>
+                {% endif %}
+            </div>
         </header>
 
         <!-- Flash Messages -->
@@ -82,17 +90,12 @@
     </script>
     <style>
         /* General Styles */
-        .access-level {
-            font-size: 1rem;
-            color: var(--text-secondary);
-            font-weight: normal;
-        }
         header {
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-        .header-left {
+        .header-left, .header-right {
             display: flex;
             align-items: center;
             gap: 1.5rem;
@@ -103,130 +106,49 @@
             color: var(--primary-color);
             font-size: 1.8rem;
             cursor: pointer;
-            transition: transform 0.3s ease;
-        }
-        .menu-btn:hover {
-            transform: scale(1.1);
         }
         .main-nav {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 250px;
-            height: 100%;
-            background: var(--card-background);
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
-            border-right: 1px solid var(--border-color);
-            transform: translateX(-100%);
-            transition: transform 0.4s ease-in-out;
-            z-index: 2000;
-            padding: 2rem;
+            position: fixed; top: 0; left: 0; width: 250px; height: 100%;
+            background: var(--card-background); backdrop-filter: blur(15px);
+            border-right: 1px solid var(--border-color); transform: translateX(-100%);
+            transition: transform 0.4s ease-in-out; z-index: 2000; padding: 2rem;
         }
-        .main-nav.active {
-            transform: translateX(0);
-        }
+        .main-nav.active { transform: translateX(0); }
         .main-nav h3 {
-            font-size: 1.5rem;
-            color: var(--primary-color);
-            margin-bottom: 2rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--border-color);
+            font-size: 1.5rem; color: var(--primary-color); margin-bottom: 2rem;
+            padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);
         }
-        .main-nav ul {
-            list-style: none;
-        }
+        .main-nav ul { list-style: none; }
         .main-nav ul li a {
-            display: block;
-            color: var(--text-color);
-            text-decoration: none;
-            padding: 1rem;
-            font-size: 1.1rem;
-            border-radius: 8px;
+            display: block; color: var(--text-color); text-decoration: none;
+            padding: 1rem; font-size: 1.1rem; border-radius: 8px;
             transition: background 0.3s, color 0.3s;
         }
-        .main-nav ul li a:hover {
-            background: var(--primary-color);
-            color: white;
-        }
-        .main-nav ul li a i {
-            margin-right: 1rem;
-        }
-        /* New Login Button Style */
-        .login-btn, .logout-btn {
-            background: var(--primary-color);
-            color: white;
-            padding: 0.7rem 1.2rem;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: bold;
-            transition: all 0.3s ease;
-            border: 1px solid rgba(255,255,255,0.2);
-            white-space: nowrap; /* Prevents text from wrapping */
-        }
-        .logout-btn {
-             background: var(--danger-color);
-        }
-        .login-btn:hover {
-            box-shadow: 0 0 15px var(--primary-color);
-            transform: translateY(-2px);
-        }
-         .logout-btn:hover {
-            box-shadow: 0 0 15px var(--danger-color);
-            transform: translateY(-2px);
-        }
-        
-        /* --- MOBILE-FRIENDLY & RESPONSIVE STYLES --- */
+        .main-nav ul li a:hover { background: var(--primary-color); color: white; }
+        .main-nav ul li a i { margin-right: 1rem; }
 
-        /* For tablets and larger phones */
+        .login-btn, .register-btn, .logout-btn {
+            color: white; padding: 0.7rem 1.2rem; border-radius: 8px;
+            text-decoration: none; font-weight: bold; transition: all 0.3s ease;
+            border: 1px solid rgba(255,255,255,0.2); white-space: nowrap;
+        }
+        .login-btn { background: var(--primary-color); }
+        .register-btn { background: #555; }
+        .logout-btn { background: var(--danger-color); }
+        .username-display { color: var(--text-secondary); }
+
+        /* Mobile Styles */
         @media (max-width: 768px) {
-            .container {
-                padding: 1.5rem;
-            }
-            .header-left h1 {
-                font-size: 1.5rem;
-            }
-            .header-left {
-                gap: 1rem;
-            }
-            .anime-grid {
-                /* Adjust grid for medium screens */
-                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-                gap: 1rem;
-            }
-            .card-header h2 {
-                font-size: 1.5rem;
-            }
-            .main-nav {
-                width: 220px;
-            }
+            .container { padding: 1.5rem; }
+            .header-left h1 { font-size: 1.5rem; }
+            .header-left, .header-right { gap: 1rem; }
+            .main-nav { width: 220px; }
+            .username-display { display: none; } /* Hide username on small screens */
         }
-
-        /* For smaller phones */
         @media (max-width: 480px) {
-            .container {
-                padding: 1rem;
-            }
-            .header-left h1 {
-                font-size: 1.2rem;
-            }
-            .login-btn, .logout-btn {
-                padding: 0.5rem 0.8rem;
-                font-size: 0.9rem;
-            }
-            .anime-grid {
-                /* Show 2 posters per row on small screens */
-                grid-template-columns: repeat(2, 1fr);
-            }
-            .card-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 1rem;
-            }
-            .modal-content {
-                width: 95%;
-                padding: 1.5rem;
-            }
+            .container { padding: 1rem; }
+            .header-left h1 { font-size: 1.2rem; }
+            .login-btn, .register-btn, .logout-btn { padding: 0.5rem 0.8rem; font-size: 0.9rem; }
         }
     </style>
 </body>
