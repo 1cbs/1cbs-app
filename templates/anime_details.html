@@ -30,7 +30,13 @@
                 <span class="item-name"><i class="fas fa-film"></i> {{ episode.title }}</span>
                 <div class="item-actions">
                     <button class="btn-icon" onclick="openModal('videoPlayerModal', '{{ episode.url }}')"><i class="fas fa-play"></i></button>
+                    
+                    <!-- New "Start Party" button for master users -->
                     {% if session['level'] == 'master' %}
+                    <form action="{{ url_for('create_watch_party') }}" method="POST" style="display: inline;">
+                        <input type="hidden" name="video_selection" value="anime-{{ episode.id }}">
+                        <button type="submit" class="btn-icon" title="Start a Watch Party"><i class="fas fa-users"></i></button>
+                    </form>
                     <form action="{{ url_for('delete_anime_episode', id=episode.id) }}" method="POST" style="display: inline;">
                         <button type="submit" class="btn-icon btn-delete"><i class="fas fa-trash"></i></button>
                     </form>
