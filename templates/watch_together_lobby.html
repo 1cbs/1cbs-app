@@ -27,9 +27,14 @@
         font-weight: bold;
         color: var(--primary-color);
     }
+    .party-info .leader {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+    }
     .party-info .video {
         font-size: 0.9rem;
         color: var(--text-secondary);
+        margin-top: 0.25rem;
     }
     .form-group select {
         width: 100%;
@@ -53,6 +58,7 @@
                 <div class="party-list-item">
                     <div class="party-info">
                         <div class="title">Party Code: {{ party.room_code }}</div>
+                        <div class="leader">Leader: {{ party.leader_username }}</div>
                         <div class="video">Watching: {{ party.video_title }}</div>
                     </div>
                     <form action="{{ url_for('join_watch_party') }}" method="POST" style="display: inline;">
@@ -83,7 +89,8 @@
             </div>
         </div>
         
-        {% if session['level'] == 'master' %}
+        <!-- This now correctly checks if ANY user is logged in -->
+        {% if 'user_id' in session %}
         <div class="card glass-effect" id="create-party">
             <div class="card-header">
                 <h2><i class="fas fa-plus-circle"></i> Create a New Party</h2>
