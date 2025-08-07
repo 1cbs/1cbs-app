@@ -32,6 +32,14 @@
                 <div class="item-actions">
                     <button class="btn-icon" onclick="openModal('videoPlayerModal', '{{ episode.url }}')"><i class="fas fa-play"></i></button>
                     
+                    <!-- This now correctly checks if ANY user is logged in -->
+                    {% if 'user_id' in session %}
+                    <form action="{{ url_for('create_watch_party') }}" method="POST" style="display: inline;">
+                        <input type="hidden" name="video_selection" value="anime-{{ episode.id }}">
+                        <button type="submit" class="btn-icon" title="Start a Watch Party"><i class="fas fa-users"></i></button>
+                    </form>
+                    {% endif %}
+
                     <!-- This now correctly checks if you are the master admin -->
                     {% if session.get('is_master') %}
                     <form action="{{ url_for('delete_anime_episode', id=episode.id) }}" method="POST" style="display: inline;">
