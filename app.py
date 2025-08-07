@@ -143,7 +143,7 @@ def register():
         if username.lower() == ADMIN_USERNAME.lower():
             flash("This username is reserved for the administrator.", "danger")
             return render_template("register.html")
-        existing_user = User.query.filter_by(username=username).first()
+        existing_user = User.query.filter(func.lower(User.username) == func.lower(username)).first()
         if existing_user:
             flash("Username already exists.", "danger")
         else:
@@ -194,7 +194,6 @@ def anime():
     series_list = series_query.order_by(AnimeSeries.title).all()
     genres = Genre.query.order_by(Genre.name).all()
     
-    # Calculate average ratings
     series_with_ratings = []
     for series in series_list:
         avg_rating = db.session.query(func.avg(Rating.stars)).filter(Rating.series_id == series.id).scalar() or 0
@@ -215,7 +214,6 @@ def anime_series_details(series_id):
             
     return render_template("anime_details.html", series=series, episodes=series.episodes, avg_rating=round(avg_rating, 1), user_rating=user_rating)
 
-# --- (Other page routes like /videos and /files remain the same) ---
 @app.route("/files")
 def files():
     file_list = []
@@ -262,8 +260,51 @@ def add_to_watch_history():
     
     return jsonify({'success': True})
 
-# --- (All other routes for watch together, vault, and admin actions remain largely the same) ---
-# ...
+# --- Admin & Master-Only Routes/Actions ---
+@app.route("/vault")
+@master_required
+def vault():
+    passwords_raw = Passwords.query.order_by(Passwords.name).all()
+    passwords = []
+    for p in passwords_raw:
+        try: decrypted = decrypt_data(p.encrypted_password)
+        except: decrypted = '*** DECRYPTION ERROR ***'
+        passwords.append({'id': p.id, 'name': p.name, 'password': decrypted})
+    return render_template("vault.html", passwords=passwords)
+
+@app.route("/admin/add_genre", methods=["POST"])
+@master_required
+def add_genre():
+    name = request.form.get('name')
+    if name:
+        existing = Genre.query.filter(func.lower(Genre.name) == func.lower(name)).first()
+        if not existing:
+            new_genre = Genre(name=name)
+            db.session.add(new_genre)
+            db.session.commit()
+            flash(f"Genre '{name}' added.", "success")
+    return redirect(url_for('anime'))
+
+@app.route("/anime/series/add", methods=["POST"])
+@master_required
+def add_anime_series():
+    title = request.form.get('title')
+    image_url = request.form.get('image_url')
+    genre_ids = request.form.getlist('genres')
+    
+    new_series = AnimeSeries(title=title, image_url=image_url)
+    
+    for genre_id in genre_ids:
+        genre = Genre.query.get(genre_id)
+        if genre:
+            new_series.genres.append(genre)
+            
+    db.session.add(new_series)
+    db.session.commit()
+    flash(f"Series '{title}' added.", "success")
+    return redirect(url_for('anime'))
+
+# --- (All other add/delete/upload actions remain the same) ---
 
 # --- Create database and admin user if they don't exist ---
 with app.app_context():
