@@ -83,7 +83,7 @@ def master_required(f):
 @app.route("/")
 def index():
     # The homepage now redirects to the anime library
-    return redirect(url_for('login'))
+    return redirect(url_for('anime'))
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
