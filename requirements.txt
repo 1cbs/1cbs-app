@@ -5,3 +5,5 @@ werkzeug
 gunicorn
 flask_sqlalchemy
 psycopg2-binary
+Flask-SocketIO
+eventlet
