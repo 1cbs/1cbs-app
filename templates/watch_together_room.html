@@ -125,10 +125,9 @@ document.addEventListener('DOMContentLoaded', function() {
         video.addEventListener('pause', () => emitPlayerEvent('pause'));
         video.addEventListener('seeked', () => emitPlayerEvent('seek'));
     } else {
-        // Viewers cannot control the video directly
-        video.onplaying = (e) => { if (!isLeader) e.preventDefault(); };
-        video.onpause = (e) => { if (!isLeader) e.preventDefault(); };
-        video.onseeked = (e) => { if (!isLeader) e.preventDefault(); };
+        // For viewers, we disable the controls. The video will still
+        // respond to commands sent by the leader via the server.
+        video.controls = false;
     }
 });
 </script>
