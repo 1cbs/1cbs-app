@@ -333,9 +333,10 @@ def delete_video(id):
 @app.route("/anime/series/add", methods=["POST"])
 @master_required
 def add_anime_series():
-    db.session.add(AnimeSeries(title=request.form['title'], image_url=request.form['image_url']))
+    new_series = AnimeSeries(title=request.form.get('title'), image_url=request.form.get('image_url'))
+    db.session.add(new_series)
     db.session.commit()
-    flash(f"Series '{request.form['title']}' added.", "success")
+    flash(f"Series '{request.form.get('title')}' added.", "success")
     return redirect(url_for("anime"))
 
 @app.route("/anime/series/delete/<int:id>", methods=["POST"])
@@ -367,7 +368,6 @@ def delete_anime_episode(id):
 # --- Create database and admin user if they don't exist ---
 with app.app_context():
     db.create_all()
-    # Check if admin user exists
     if ADMIN_PASSWORD and not User.query.filter_by(username=ADMIN_USERNAME).first():
         admin_user = User(
             username=ADMIN_USERNAME,
