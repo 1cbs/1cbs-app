@@ -19,7 +19,8 @@
             <a href="{{ url_for('anime') }}" class="btn-icon" style="margin-bottom: 1rem;"><i class="fas fa-arrow-left"></i> Back to Library</a>
             <h2>{{ series.title }}</h2>
         </div>
-        {% if session['level'] == 'master' %}
+        <!-- This now correctly checks if you are the master admin -->
+        {% if session.get('is_master') %}
         <button class="btn-primary" onclick="openModal('addEpisodeModal')"><i class="fas fa-plus"></i> Add New Episode</button>
         {% endif %}
     </div>
@@ -31,12 +32,8 @@
                 <div class="item-actions">
                     <button class="btn-icon" onclick="openModal('videoPlayerModal', '{{ episode.url }}')"><i class="fas fa-play"></i></button>
                     
-                    <!-- New "Start Party" button for master users -->
-                    {% if session['level'] == 'master' %}
-                    <form action="{{ url_for('create_watch_party') }}" method="POST" style="display: inline;">
-                        <input type="hidden" name="video_selection" value="anime-{{ episode.id }}">
-                        <button type="submit" class="btn-icon" title="Start a Watch Party"><i class="fas fa-users"></i></button>
-                    </form>
+                    <!-- This now correctly checks if you are the master admin -->
+                    {% if session.get('is_master') %}
                     <form action="{{ url_for('delete_anime_episode', id=episode.id) }}" method="POST" style="display: inline;">
                         <button type="submit" class="btn-icon btn-delete"><i class="fas fa-trash"></i></button>
                     </form>
@@ -51,7 +48,7 @@
 </section>
 
 <!-- Add Episode Modal (Master Only) -->
-{% if session['level'] == 'master' %}
+{% if session.get('is_master') %}
 <div id="addEpisodeModal" class="modal">
     <div class="modal-content glass-effect">
         <span class="close-btn" onclick="closeModal('addEpisodeModal')">&times;</span>
