@@ -1,3 +1,7 @@
+# --- Eventlet Patching (MUST be at the very top) ---
+import eventlet
+eventlet.monkey_patch()
+
 import os
 import secrets
 import string
