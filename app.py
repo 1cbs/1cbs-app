@@ -254,7 +254,6 @@ def on_disconnect():
 @app.route("/vault")
 @master_required
 def vault():
-    # ... (vault logic remains the same)
     passwords_raw = Passwords.query.order_by(Passwords.name).all()
     passwords = []
     for p in passwords_raw:
@@ -263,14 +262,93 @@ def vault():
         passwords.append({'id': p.id, 'name': p.name, 'password': decrypted})
     return render_template("vault.html", passwords=passwords)
 
-# ... (All other add/delete/upload actions now require master_required decorator)
 @app.route("/vault/add", methods=["POST"])
 @master_required
 def add_password():
-    # ...
+    new_password = Passwords(name=request.form['name'], encrypted_password=encrypt_data(request.form['password']))
+    db.session.add(new_password)
+    db.session.commit()
+    flash(f"Password for '{request.form['name']}' added.", "success")
     return redirect(url_for("vault"))
 
-# ... (and so on for all other master actions)
+@app.route("/vault/delete/<int:id>", methods=["POST"])
+@master_required
+def delete_password(id):
+    db.session.delete(Passwords.query.get_or_404(id))
+    db.session.commit()
+    flash("Password deleted.", "success")
+    return redirect(url_for("vault"))
+
+@app.route("/upload/file", methods=["POST"])
+@master_required
+def upload_file():
+    if 'file' not in request.files: return jsonify({"error": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '': return jsonify({"error": "No selected file"}), 400
+    filename = secure_filename(file.filename)
+    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    return jsonify({"success": f"File '{filename}' uploaded"}), 200
+
+@app.route("/download/file/<filename>")
+def download_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+
+@app.route("/delete/file/<filename>", methods=["POST"])
+@master_required
+def delete_file(filename):
+    os.remove(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    flash(f"File '{filename}' deleted.", "success")
+    return redirect(url_for("files"))
+
+@app.route("/videos/add", methods=["POST"])
+@master_required
+def add_video():
+    db.session.add(Videos(title=request.form['title'], url=request.form['url']))
+    db.session.commit()
+    flash(f"Video '{request.form['title']}' added.", "success")
+    return redirect(url_for("videos"))
+
+@app.route("/videos/delete/<int:id>", methods=["POST"])
+@master_required
+def delete_video(id):
+    db.session.delete(Videos.query.get_or_404(id))
+    db.session.commit()
+    flash("Video deleted.", "success")
+    return redirect(url_for("videos"))
+
+@app.route("/anime/series/add", methods=["POST"])
+@master_required
+def add_anime_series():
+    db.session.add(AnimeSeries(title=request.form['title'], image_url=request.form['image_url']))
+    db.session.commit()
+    flash(f"Series '{request.form['title']}' added.", "success")
+    return redirect(url_for("anime"))
+
+@app.route("/anime/series/delete/<int:id>", methods=["POST"])
+@master_required
+def delete_anime_series(id):
+    db.session.delete(AnimeSeries.query.get_or_404(id))
+    db.session.commit()
+    flash("Series and all its episodes deleted.", "success")
+    return redirect(url_for("anime"))
+
+@app.route("/anime/episode/add/<int:series_id>", methods=["POST"])
+@master_required
+def add_anime_episode(series_id):
+    db.session.add(AnimeEpisodes(title=request.form['title'], url=request.form['url'], series_id=series_id))
+    db.session.commit()
+    flash(f"Episode '{request.form['title']}' added.", "success")
+    return redirect(url_for("anime_series_details", series_id=series_id))
+
+@app.route("/anime/episode/delete/<int:id>", methods=["POST"])
+@master_required
+def delete_anime_episode(id):
+    episode = AnimeEpisodes.query.get_or_404(id)
+    series_id = episode.series_id
+    db.session.delete(episode)
+    db.session.commit()
+    flash("Episode deleted.", "success")
+    return redirect(url_for("anime_series_details", series_id=series_id))
 
 # --- Create database tables if they don't exist ---
 with app.app_context():
