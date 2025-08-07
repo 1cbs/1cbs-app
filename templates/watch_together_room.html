@@ -4,9 +4,15 @@
 
 {% block content %}
 <style>
-    .room-container {
-        max-width: 1200px;
-        margin: 0 auto;
+    .party-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+    @media (min-width: 992px) {
+        .party-layout {
+            grid-template-columns: 3fr 1fr;
+        }
     }
     .video-wrapper {
         position: relative;
@@ -30,15 +36,9 @@
         border: 1px solid var(--border-color);
         border-radius: 8px;
     }
-    .room-info h2 {
-        margin-bottom: 0.5rem;
-    }
-    .room-info p {
-        color: var(--text-secondary);
-    }
-    .room-info strong {
+    .room-info p strong {
         color: var(--primary-color);
-        user-select: all; /* Make it easy to copy */
+        user-select: all;
     }
     .status-log {
         margin-top: 1rem;
@@ -46,23 +46,71 @@
         color: var(--text-secondary);
         font-style: italic;
     }
+    /* Chat Styles */
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        height: 500px; /* Adjust height as needed */
+        background: var(--card-background);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 1rem;
+    }
+    .chat-messages {
+        flex-grow: 1;
+        overflow-y: auto;
+        margin-bottom: 1rem;
+        display: flex;
+        flex-direction: column-reverse; /* Newest messages at the bottom */
+    }
+    .chat-message {
+        margin-bottom: 0.5rem;
+        padding: 0.5rem;
+        border-radius: 5px;
+    }
+    .chat-message .username {
+        font-weight: bold;
+        color: var(--primary-color);
+        margin-right: 0.5rem;
+    }
+    .chat-form {
+        display: flex;
+        gap: 0.5rem;
+    }
+    .chat-form input {
+        flex-grow: 1;
+        background: rgba(0,0,0,0.3);
+        border: 1px solid var(--border-color);
+        color: var(--text-color);
+        padding: 0.5rem;
+        border-radius: 5px;
+    }
 </style>
 
-<div class="room-container">
-    <div class="video-wrapper">
-        <video id="synced-player" src="{{ party.video_url }}" controls></video>
+<div class="party-layout">
+    <!-- Left Column: Video and Info -->
+    <div class="video-container">
+        <div class="video-wrapper">
+            <video id="synced-player" src="{{ party.video_url }}" controls></video>
+        </div>
+        <div class="room-info">
+            <h2>{{ party.video_title }}</h2>
+            <p>You are in party: <strong>{{ party.room_code }}</strong>. Share this code with your friends!</p>
+            <div id="status-log" class="status-log">Connecting to party...</div>
+        </div>
     </div>
 
-    <div class="room-info">
-        <h2>{{ party.video_title }}</h2>
-        <p>You are in party: <strong>{{ party.room_code }}</strong>. Share this code with your friends!</p>
-        {% if party.is_leader %}
-        <p>You are the party leader. Your video controls will sync with everyone else.</p>
-        {% else %}
-        <p>The party leader is controlling the video.</p>
-        {% endif %}
-        <div id="status-log" class="status-log">Connecting to party...</div>
-    </div>
+    <!-- Right Column: Chat -->
+    <aside class="chat-container">
+        <h3><i class="fas fa-comments"></i> Party Chat</h3>
+        <div class="chat-messages" id="chat-messages">
+            <!-- Messages will be added here by JavaScript -->
+        </div>
+        <form id="chat-form" class="chat-form">
+            <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off">
+            <button type="submit" class="btn-primary"><i class="fas fa-paper-plane"></i></button>
+        </form>
+    </aside>
 </div>
 
 <!-- Include the Socket.IO client library -->
@@ -72,27 +120,28 @@ document.addEventListener('DOMContentLoaded', function() {
     const video = document.getElementById('synced-player');
     const statusLog = document.getElementById('status-log');
     const roomCode = "{{ party.room_code }}";
-    const isLeader = {{ party.is_leader|tojson }};
+    const currentUsername = "{{ session.username }}";
+    let isLeader = false; // We will determine this upon joining
 
-    // Connect to the server's WebSocket
     const socket = io();
 
     socket.on('connect', () => {
-        console.log('Connected to server!');
-        // Join the specific party room
         socket.emit('join', { room_code: roomCode });
-        statusLog.textContent = 'Connected! Waiting for others...';
+        statusLog.textContent = 'Connected! Enjoy the show.';
     });
 
     socket.on('status', (data) => {
-        console.log('Status update:', data.msg);
         statusLog.textContent = data.msg;
+        if (data.leader_sid === socket.id) {
+            isLeader = true;
+            setupLeaderControls();
+        } else {
+            video.controls = false;
+        }
     });
 
-    // This is where viewers receive commands from the leader
     socket.on('player_control', (data) => {
         if (!isLeader) {
-            console.log('Received command:', data.event);
             switch(data.event) {
                 case 'play':
                     video.currentTime = data.time;
@@ -109,26 +158,46 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // This is where the leader sends commands
-    if (isLeader) {
+    function setupLeaderControls() {
         const emitPlayerEvent = (eventName) => {
-            const eventData = {
-                event: eventName,
-                time: video.currentTime,
-                room_code: roomCode
-            };
-            console.log('Sending command:', eventData);
+            const eventData = { event: eventName, time: video.currentTime, room_code: roomCode };
             socket.emit('player_event', eventData);
         };
-
         video.addEventListener('play', () => emitPlayerEvent('play'));
         video.addEventListener('pause', () => emitPlayerEvent('pause'));
         video.addEventListener('seeked', () => emitPlayerEvent('seek'));
-    } else {
-        // For viewers, we disable the controls. The video will still
-        // respond to commands sent by the leader via the server.
-        video.controls = false;
     }
+
+    // --- Chat Logic ---
+    const chatForm = document.getElementById('chat-form');
+    const chatInput = document.getElementById('chat-input');
+    const messagesContainer = document.getElementById('chat-messages');
+
+    chatForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (chatInput.value) {
+            socket.emit('chat_message', { room_code: roomCode, message: chatInput.value });
+            chatInput.value = '';
+        }
+    });
+
+    socket.on('new_chat_message', function(data) {
+        const item = document.createElement('div');
+        item.classList.add('chat-message');
+        
+        const usernameSpan = document.createElement('span');
+        usernameSpan.classList.add('username');
+        usernameSpan.textContent = data.username;
+        
+        const messageSpan = document.createElement('span');
+        messageSpan.textContent = data.message;
+        
+        item.appendChild(usernameSpan);
+        item.appendChild(messageSpan);
+        
+        // Insert new message at the top, since the container is reversed
+        messagesContainer.insertBefore(item, messagesContainer.firstChild);
+    });
 });
 </script>
 {% endblock %}
