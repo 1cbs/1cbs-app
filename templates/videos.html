@@ -6,8 +6,8 @@
 <section class="card glass-effect" id="videos">
     <div class="card-header">
         <h2><i class="fas fa-video"></i> Video Library</h2>
-        <!-- Master users see a button to open the 'add' modal -->
-        {% if session['level'] == 'master' %}
+        <!-- This now correctly checks if you are the master admin -->
+        {% if session.get('is_master') %}
         <button class="btn-primary" onclick="openModal('addVideoModal')"><i class="fas fa-plus"></i> Add New Video</button>
         {% endif %}
     </div>
@@ -17,15 +17,10 @@
             <li>
                 <span class="item-name"><i class="fas fa-film"></i> {{ v.title }}</span>
                 <div class="item-actions">
-                    <!-- The play button now uses the URL from the database -->
                     <button class="btn-icon" onclick="openModal('videoPlayerModal', '{{ v.url }}')"><i class="fas fa-play"></i></button>
                     
-                    <!-- New "Start Party" button for master users -->
-                    {% if session['level'] == 'master' %}
-                    <form action="{{ url_for('create_watch_party') }}" method="POST" style="display: inline;">
-                        <input type="hidden" name="video_selection" value="video-{{ v.id }}">
-                        <button type="submit" class="btn-icon" title="Start a Watch Party"><i class="fas fa-users"></i></button>
-                    </form>
+                    <!-- This now correctly checks if you are the master admin -->
+                    {% if session.get('is_master') %}
                     <form action="{{ url_for('delete_video', id=v.id) }}" method="POST" style="display: inline;">
                         <button type="submit" class="btn-icon btn-delete"><i class="fas fa-trash"></i></button>
                     </form>
@@ -40,7 +35,7 @@
 </section>
 
 <!-- Add Video Modal (Master Only) -->
-{% if session['level'] == 'master' %}
+{% if session.get('is_master') %}
 <div id="addVideoModal" class="modal">
     <div class="modal-content glass-effect">
         <span class="close-btn" onclick="closeModal('addVideoModal')">&times;</span>
