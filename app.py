@@ -144,15 +144,24 @@ def anime_series_details(series_id):
 @app.route("/watch-together")
 def watch_together_lobby():
     parties = WatchParty.query.all()
-    return render_template("watch_together_lobby.html", parties=parties)
+    # Fetch all videos and anime for the "Create Party" dropdown
+    videos = Videos.query.order_by(Videos.title).all()
+    anime_episodes = AnimeEpisodes.query.join(AnimeSeries).order_by(AnimeSeries.title, AnimeEpisodes.title).all()
+    return render_template("watch_together_lobby.html", parties=parties, videos=videos, anime_episodes=anime_episodes)
 
 def generate_room_code(length=6):
     return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(length))
 
 @app.route("/watch-together/create", methods=["POST"])
 def create_watch_party():
-    video_type = request.form.get('video_type')
-    video_id = request.form.get('video_id')
+    # This route now handles a combined value like "anime-1" or "video-5"
+    video_selection = request.form.get('video_selection')
+    if not video_selection:
+        flash("You must select a video to watch.", "danger")
+        return redirect(url_for('watch_together_lobby'))
+
+    video_type, video_id = video_selection.split('-')
+    video_id = int(video_id)
     
     video = None
     if video_type == 'anime':
@@ -165,7 +174,6 @@ def create_watch_party():
         return redirect(url_for('anime'))
 
     room_code = generate_room_code()
-    # Store temporary info in session to create party upon joining
     session['party_info'] = {
         'room_code': room_code,
         'video_title': video.title,
@@ -207,7 +215,6 @@ def on_join(data):
     is_leader = session.get('party_info', {}).get('is_leader', False)
     
     if is_leader:
-        # If the leader is joining, create the party in the database
         party_info = session.get('party_info')
         existing_party = WatchParty.query.filter_by(room_code=room_code).first()
         if not existing_party:
@@ -227,13 +234,11 @@ def handle_player_event(data):
     room_code = data['room_code']
     party = WatchParty.query.filter_by(room_code=room_code).first()
     
-    # Only the leader can control the video
     if party and request.sid == party.leader_sid:
         emit('player_control', data, room=room_code, include_self=False)
 
 @socketio.on('disconnect')
 def on_disconnect():
-    # Check if the disconnecting user was a party leader
     party = WatchParty.query.filter_by(leader_sid=request.sid).first()
     if party:
         emit('status', {'msg': 'The party leader has disconnected. The party has ended.'}, room=party.room_code)
