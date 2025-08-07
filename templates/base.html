@@ -16,7 +16,7 @@
         <h3>Navigation</h3>
         <ul>
             <!-- Vault is now only for the master admin -->
-            {% if session.get('username') == config.get('ADMIN_USERNAME') %}
+            {% if session.get('is_master') %}
             <li><a href="{{ url_for('vault') }}"><i class="fas fa-key"></i> Vault</a></li>
             {% endif %}
             <li><a href="{{ url_for('files') }}"><i class="fas fa-folder"></i> Files</a></li>
