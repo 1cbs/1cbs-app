@@ -32,16 +32,17 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # --- Admin Credentials ---
 ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
-ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH')
+ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD') # Plain text password from Render
 
 # --- Database Models ---
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
+    is_master = db.Column(db.Boolean, default=False, nullable=False)
     parties = db.relationship('WatchParty', backref='leader', lazy=True, cascade="all, delete-orphan")
 
-class Passwords(db.Model): # Admin's private password vault
+class Passwords(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     encrypted_password = db.Column(db.String(500), nullable=False)
@@ -105,21 +106,21 @@ def master_required(f):
 def index():
     return redirect(url_for('anime'))
 
-# --- New User & Admin Authentication Routes ---
+# --- User Authentication Routes ---
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if 'user_id' in session: return redirect(url_for('index'))
     if request.method == "POST":
         username = request.form['username']
         password = request.form['password']
-        if username == ADMIN_USERNAME:
+        if username.lower() == ADMIN_USERNAME.lower():
             flash("This username is reserved for the administrator.", "danger")
             return render_template("register.html")
         existing_user = User.query.filter_by(username=username).first()
         if existing_user:
             flash("Username already exists. Please choose a different one.", "danger")
         else:
-            new_user = User(username=username, password_hash=generate_password_hash(password))
+            new_user = User(username=username, password_hash=generate_password_hash(password), is_master=False)
             db.session.add(new_user)
             db.session.commit()
             flash("Account created successfully! You can now log in.", "success")
@@ -132,27 +133,18 @@ def login():
     if request.method == "POST":
         username = request.form['username']
         password = request.form['password']
-        
-        # Check for Master Admin login first
-        if username == ADMIN_USERNAME and ADMIN_PASSWORD_HASH and check_password_hash(ADMIN_PASSWORD_HASH, password):
-            session['is_master'] = True
-            session['username'] = ADMIN_USERNAME
-            # Admin doesn't need a user_id from the database
-            session['user_id'] = 'admin' 
-            flash("Administrator login successful.", "success")
-            return redirect(url_for('index'))
-
-        # Check for regular user login
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password_hash, password):
             session['user_id'] = user.id
             session['username'] = user.username
-            session['is_master'] = False
-            flash(f"Welcome back, {user.username}!", "success")
+            session['is_master'] = user.is_master
+            if user.is_master:
+                flash("Administrator login successful.", "success")
+            else:
+                flash(f"Welcome back, {user.username}!", "success")
             return redirect(url_for('index'))
         else:
             flash("Invalid username or password.", "danger")
-            
     return render_template("login.html")
 
 @app.route("/logout")
@@ -161,7 +153,7 @@ def logout():
     flash("You have been logged out.", "success")
     return redirect(url_for("index"))
 
-# --- Public Page Routes ---
+# --- (All other page routes remain the same) ---
 @app.route("/files")
 def files():
     file_list = []
@@ -184,7 +176,6 @@ def anime_series_details(series_id):
     series = AnimeSeries.query.get_or_404(series_id)
     return render_template("anime_details.html", series=series, episodes=series.episodes)
 
-# --- Watch Together Routes (Require user login) ---
 @app.route("/watch-together")
 @login_required
 def watch_together_lobby():
@@ -242,12 +233,16 @@ def on_join(data):
     username = session.get('username', 'A guest')
     join_room(room_code)
     party = WatchParty.query.filter_by(room_code=room_code).first()
+    leader_sid = None
     if not party: # First person to join becomes the leader
         party_info = session.get('party_info')
         new_party = WatchParty(room_code=room_code, leader_id=session['user_id'], leader_sid=request.sid, video_title=party_info['video_title'], video_url=party_info['video_url'])
         db.session.add(new_party)
         db.session.commit()
-    emit('status', {'msg': f'{username} has joined the room.'}, room=room_code)
+        leader_sid = request.sid
+    else:
+        leader_sid = party.leader_sid
+    emit('status', {'msg': f'{username} has joined the room.', 'leader_sid': leader_sid}, room=room_code)
 
 @socketio.on('player_event')
 def handle_player_event(data):
@@ -281,7 +276,6 @@ def vault():
         passwords.append({'id': p.id, 'name': p.name, 'password': decrypted})
     return render_template("vault.html", passwords=passwords)
 
-# ... (All other add/delete/upload actions now require master_required decorator)
 @app.route("/vault/add", methods=["POST"])
 @master_required
 def add_password():
@@ -370,9 +364,19 @@ def delete_anime_episode(id):
     flash("Episode deleted.", "success")
     return redirect(url_for("anime_series_details", series_id=series_id))
 
-# --- Create database tables if they don't exist ---
+# --- Create database and admin user if they don't exist ---
 with app.app_context():
     db.create_all()
+    # Check if admin user exists
+    if ADMIN_PASSWORD and not User.query.filter_by(username=ADMIN_USERNAME).first():
+        admin_user = User(
+            username=ADMIN_USERNAME,
+            password_hash=generate_password_hash(ADMIN_PASSWORD),
+            is_master=True
+        )
+        db.session.add(admin_user)
+        db.session.commit()
+        print(f"Admin user '{ADMIN_USERNAME}' created.")
 
 if __name__ == "__main__":
     socketio.run(app, debug=True, port=5000)
