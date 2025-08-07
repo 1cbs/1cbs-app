@@ -15,13 +15,13 @@
     <nav class="main-nav">
         <h3>Navigation</h3>
         <ul>
-            <!-- The Vault link only shows if you are logged in as master -->
             {% if session['level'] == 'master' %}
             <li><a href="{{ url_for('vault') }}"><i class="fas fa-key"></i> Vault</a></li>
             {% endif %}
             <li><a href="{{ url_for('files') }}"><i class="fas fa-folder"></i> Files</a></li>
             <li><a href="{{ url_for('videos') }}"><i class="fas fa-video"></i> Videos</a></li>
             <li><a href="{{ url_for('anime') }}"><i class="fas fa-tv"></i> Anime</a></li>
+            <li><a href="{{ url_for('watch_together_lobby') }}"><i class="fas fa-users"></i> Watch Together</a></li>
         </ul>
     </nav>
 
@@ -32,7 +32,6 @@
                 <button class="menu-btn" id="menu-toggle"><i class="fas fa-bars"></i></button>
                 <h1>1cbs <span class="access-level">({{ session['level']|capitalize }} Access)</span></h1>
             </div>
-            <!-- This button now changes based on your access level -->
             {% if session['level'] == 'master' %}
                 <a href="{{ url_for('logout') }}" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
             {% else %}
@@ -154,7 +153,7 @@
             margin-right: 1rem;
         }
         /* New Login Button Style */
-        .login-btn {
+        .login-btn, .logout-btn {
             background: var(--primary-color);
             color: white;
             padding: 0.7rem 1.2rem;
@@ -163,22 +162,70 @@
             font-weight: bold;
             transition: all 0.3s ease;
             border: 1px solid rgba(255,255,255,0.2);
+            white-space: nowrap; /* Prevents text from wrapping */
+        }
+        .logout-btn {
+             background: var(--danger-color);
         }
         .login-btn:hover {
             box-shadow: 0 0 15px var(--primary-color);
             transform: translateY(-2px);
         }
+         .logout-btn:hover {
+            box-shadow: 0 0 15px var(--danger-color);
+            transform: translateY(-2px);
+        }
         
-        /* Media query for mobile-friendliness */
+        /* --- MOBILE-FRIENDLY & RESPONSIVE STYLES --- */
+
+        /* For tablets and larger phones */
         @media (max-width: 768px) {
             .container {
-                padding: 1rem;
+                padding: 1.5rem;
             }
             .header-left h1 {
                 font-size: 1.5rem;
             }
+            .header-left {
+                gap: 1rem;
+            }
+            .anime-grid {
+                /* Adjust grid for medium screens */
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                gap: 1rem;
+            }
+            .card-header h2 {
+                font-size: 1.5rem;
+            }
             .main-nav {
                 width: 220px;
+            }
+        }
+
+        /* For smaller phones */
+        @media (max-width: 480px) {
+            .container {
+                padding: 1rem;
+            }
+            .header-left h1 {
+                font-size: 1.2rem;
+            }
+            .login-btn, .logout-btn {
+                padding: 0.5rem 0.8rem;
+                font-size: 0.9rem;
+            }
+            .anime-grid {
+                /* Show 2 posters per row on small screens */
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .card-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+            .modal-content {
+                width: 95%;
+                padding: 1.5rem;
             }
         }
     </style>
