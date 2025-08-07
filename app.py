@@ -30,9 +30,9 @@ db = SQLAlchemy(app)
 # --- Create Application Directories ---
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# --- Password Management ---
-MASTER_PASSWORD_HASH = os.getenv('MASTER_PASSWORD_HASH') # This is now for the site owner/admin
-ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin') # Default admin username is 'admin'
+# --- Admin Credentials ---
+ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH')
 
 # --- Database Models ---
 class User(db.Model):
@@ -94,7 +94,7 @@ def login_required(f):
 def master_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if session.get('username') != ADMIN_USERNAME:
+        if not session.get('is_master'):
             flash("You must be an administrator to access this page.", "danger")
             return redirect(url_for('index'))
         return f(*args, **kwargs)
@@ -105,13 +105,16 @@ def master_required(f):
 def index():
     return redirect(url_for('anime'))
 
-# --- New User Authentication Routes ---
+# --- New User & Admin Authentication Routes ---
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if 'user_id' in session: return redirect(url_for('index'))
     if request.method == "POST":
         username = request.form['username']
         password = request.form['password']
+        if username == ADMIN_USERNAME:
+            flash("This username is reserved for the administrator.", "danger")
+            return render_template("register.html")
         existing_user = User.query.filter_by(username=username).first()
         if existing_user:
             flash("Username already exists. Please choose a different one.", "danger")
@@ -129,13 +132,27 @@ def login():
     if request.method == "POST":
         username = request.form['username']
         password = request.form['password']
+        
+        # Check for Master Admin login first
+        if username == ADMIN_USERNAME and ADMIN_PASSWORD_HASH and check_password_hash(ADMIN_PASSWORD_HASH, password):
+            session['is_master'] = True
+            session['username'] = ADMIN_USERNAME
+            # Admin doesn't need a user_id from the database
+            session['user_id'] = 'admin' 
+            flash("Administrator login successful.", "success")
+            return redirect(url_for('index'))
+
+        # Check for regular user login
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password_hash, password):
             session['user_id'] = user.id
             session['username'] = user.username
+            session['is_master'] = False
+            flash(f"Welcome back, {user.username}!", "success")
             return redirect(url_for('index'))
         else:
             flash("Invalid username or password.", "danger")
+            
     return render_template("login.html")
 
 @app.route("/logout")
@@ -147,7 +164,9 @@ def logout():
 # --- Public Page Routes ---
 @app.route("/files")
 def files():
-    file_list = os.listdir(app.config['UPLOAD_FOLDER'])
+    file_list = []
+    if os.path.exists(app.config['UPLOAD_FOLDER']):
+        file_list = os.listdir(app.config['UPLOAD_FOLDER'])
     return render_template("files.html", files=file_list)
 
 @app.route("/videos")
@@ -165,11 +184,11 @@ def anime_series_details(series_id):
     series = AnimeSeries.query.get_or_404(series_id)
     return render_template("anime_details.html", series=series, episodes=series.episodes)
 
-# --- Watch Together Routes ---
+# --- Watch Together Routes (Require user login) ---
 @app.route("/watch-together")
 @login_required
 def watch_together_lobby():
-    parties = WatchParty.query.all()
+    parties = WatchParty.query.join(User).add_columns(WatchParty.room_code, WatchParty.video_title, User.username.label("leader_username")).all()
     videos = Videos.query.order_by(Videos.title).all()
     anime_episodes = AnimeEpisodes.query.join(AnimeSeries).order_by(AnimeSeries.title, AnimeEpisodes.title).all()
     return render_template("watch_together_lobby.html", parties=parties, videos=videos, anime_episodes=anime_episodes)
@@ -246,7 +265,7 @@ def handle_chat_message(data):
 def on_disconnect():
     party = WatchParty.query.filter_by(leader_sid=request.sid).first()
     if party:
-        emit('status', {'msg': 'The party leader has disconnected. The party has ended.'}, room=party.room_code)
+        emit('status', {'msg': f'The party leader ({party.leader.username}) has disconnected. The party has ended.'}, room=party.room_code)
         db.session.delete(party)
         db.session.commit()
 
@@ -262,6 +281,7 @@ def vault():
         passwords.append({'id': p.id, 'name': p.name, 'password': decrypted})
     return render_template("vault.html", passwords=passwords)
 
+# ... (All other add/delete/upload actions now require master_required decorator)
 @app.route("/vault/add", methods=["POST"])
 @master_required
 def add_password():
