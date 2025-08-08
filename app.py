@@ -35,6 +35,9 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD')
 
+# --- In-memory store for online users ---
+online_users = {} # Maps user_id to socket_id
+
 # --- Database Models ---
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -53,9 +56,8 @@ class Friendship(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     requester_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     addressee_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    status = db.Column(db.String(20), default='pending', nullable=False) # pending, accepted
+    status = db.Column(db.String(20), default='pending', nullable=False)
 
-# --- (Other models remain the same) ---
 class Passwords(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
@@ -131,7 +133,6 @@ def register():
             flash("Username already exists.", "danger")
         else:
             new_user = User(username=username, password_hash=generate_password_hash(password), is_master=False)
-            # Create a default profile for the new user
             new_user.profile = Profile()
             db.session.add(new_user)
             db.session.commit()
@@ -162,30 +163,20 @@ def logout():
     flash("You have been logged out.", "success")
     return redirect(url_for("index"))
 
-# --- New Social Routes ---
+# --- Social & Calling Routes ---
 @app.route("/profile/<username>")
 @login_required
 def view_profile(username):
     user = User.query.filter_by(username=username).first_or_404()
-    # Check friendship status
     friendship_status = None
     if user.id != session['user_id']:
-        friendship = Friendship.query.filter(
-            or_(
-                (Friendship.requester_id == session['user_id']) & (Friendship.addressee_id == user.id),
-                (Friendship.requester_id == user.id) & (Friendship.addressee_id == session['user_id'])
-            )
-        ).first()
+        friendship = Friendship.query.filter(or_((Friendship.requester_id == session['user_id']) & (Friendship.addressee_id == user.id), (Friendship.requester_id == user.id) & (Friendship.addressee_id == session['user_id']))).first()
         if friendship:
-            if friendship.status == 'accepted':
-                friendship_status = 'friends'
+            if friendship.status == 'accepted': friendship_status = 'friends'
             elif friendship.status == 'pending':
-                if friendship.requester_id == session['user_id']:
-                    friendship_status = 'request_sent'
-                else:
-                    friendship_status = 'request_received'
-        else:
-            friendship_status = 'not_friends'
+                if friendship.requester_id == session['user_id']: friendship_status = 'request_sent'
+                else: friendship_status = 'request_received'
+        else: friendship_status = 'not_friends'
     return render_template("profile.html", user=user, friendship_status=friendship_status)
 
 @app.route("/profile/edit", methods=["GET", "POST"])
@@ -204,31 +195,21 @@ def edit_profile():
 @login_required
 def friends():
     user_id = session['user_id']
-    # Find accepted friends
-    friends = User.query.join(Friendship, or_(
-        (Friendship.requester_id == user_id) & (Friendship.addressee_id == User.id),
-        (Friendship.addressee_id == user_id) & (Friendship.requester_id == User.id)
-    )).filter(Friendship.status == 'accepted').all()
-    
-    # Find pending requests sent to the user
-    pending_requests = User.query.join(Friendship, Friendship.requester_id == User.id)\
-        .filter(Friendship.addressee_id == user_id, Friendship.status == 'pending').all()
-
+    friends_query = Friendship.query.filter(Friendship.status == 'accepted').filter(or_(Friendship.requester_id == user_id, Friendship.addressee_id == user_id)).all()
+    friends = []
+    for f in friends_query:
+        friend_id = f.addressee_id if f.requester_id == user_id else f.requester_id
+        friend_user = User.query.get(friend_id)
+        is_online = friend_id in online_users
+        friends.append({'user': friend_user, 'is_online': is_online})
+    pending_requests = User.query.join(Friendship, Friendship.requester_id == User.id).filter(Friendship.addressee_id == user_id, Friendship.status == 'pending').all()
     return render_template("friends.html", friends=friends, pending_requests=pending_requests)
 
 @app.route("/friends/add/<int:user_id>", methods=["POST"])
 @login_required
 def add_friend(user_id):
-    # Prevent adding self
-    if user_id == session['user_id']:
-        return redirect(url_for('friends'))
-    # Prevent duplicate requests
-    existing = Friendship.query.filter(
-        or_(
-            (Friendship.requester_id == session['user_id']) & (Friendship.addressee_id == user_id),
-            (Friendship.requester_id == user_id) & (Friendship.addressee_id == session['user_id'])
-        )
-    ).first()
+    if user_id == session['user_id']: return redirect(url_for('friends'))
+    existing = Friendship.query.filter(or_((Friendship.requester_id == session['user_id']) & (Friendship.addressee_id == user_id), (Friendship.requester_id == user_id) & (Friendship.addressee_id == session['user_id']))).first()
     if not existing:
         new_request = Friendship(requester_id=session['user_id'], addressee_id=user_id)
         db.session.add(new_request)
@@ -236,7 +217,6 @@ def add_friend(user_id):
         flash("Friend request sent.", "success")
     else:
         flash("You already have a connection with this user.", "warning")
-    
     user_to_redirect = User.query.get(user_id)
     return redirect(url_for('view_profile', username=user_to_redirect.username))
 
@@ -253,24 +233,18 @@ def accept_friend(requester_id):
 @app.route("/friends/remove/<int:user_id>", methods=["POST"])
 @login_required
 def remove_friend(user_id):
-    friendship = Friendship.query.filter(
-        or_(
-            (Friendship.requester_id == session['user_id']) & (Friendship.addressee_id == user_id),
-            (Friendship.requester_id == user_id) & (Friendship.addressee_id == session['user_id'])
-        )
-    ).first()
+    friendship = Friendship.query.filter(or_((Friendship.requester_id == session['user_id']) & (Friendship.addressee_id == user_id), (Friendship.requester_id == user_id) & (Friendship.addressee_id == session['user_id']))).first()
     if friendship:
         db.session.delete(friendship)
         db.session.commit()
         flash("Friend removed.", "success")
     return redirect(url_for('friends'))
 
-# --- (All other routes and actions remain largely the same) ---
+# --- (Other page routes remain the same) ---
 @app.route("/files")
 def files():
     file_list = []
-    if os.path.exists(app.config['UPLOAD_FOLDER']):
-        file_list = os.listdir(app.config['UPLOAD_FOLDER'])
+    if os.path.exists(app.config['UPLOAD_FOLDER']): file_list = os.listdir(app.config['UPLOAD_FOLDER'])
     return render_template("files.html", files=file_list)
 @app.route("/videos")
 def videos():
@@ -297,17 +271,12 @@ def generate_room_code(length=6):
 @login_required
 def create_watch_party():
     video_selection = request.form.get('video_selection')
-    if not video_selection:
-        flash("You must select a video to watch.", "danger")
-        return redirect(url_for('watch_together_lobby'))
+    if not video_selection: return redirect(url_for('watch_together_lobby'))
     video_type, video_id = video_selection.split('-')
-    video_id = int(video_id)
     video = None
-    if video_type == 'anime': video = AnimeEpisodes.query.get(video_id)
-    elif video_type == 'video': video = Videos.query.get(video_id)
-    if not video:
-        flash("Could not find the selected video.", "danger")
-        return redirect(url_for('anime'))
+    if video_type == 'anime': video = AnimeEpisodes.query.get(int(video_id))
+    elif video_type == 'video': video = Videos.query.get(int(video_id))
+    if not video: return redirect(url_for('anime'))
     room_code = generate_room_code()
     session['party_info'] = {'room_code': room_code, 'video_title': video.title, 'video_url': video.url}
     return redirect(url_for('watch_together_room', room_code=room_code))
@@ -326,9 +295,26 @@ def join_watch_party():
 @login_required
 def watch_together_room(room_code):
     party_info = session.get('party_info')
-    if not party_info or party_info['room_code'] != room_code:
-        return redirect(url_for('watch_together_lobby'))
+    if not party_info or party_info['room_code'] != room_code: return redirect(url_for('watch_together_lobby'))
     return render_template("watch_together_room.html", party=party_info)
+
+# --- Socket.IO Event Handlers ---
+@socketio.on('connect')
+def on_connect():
+    if 'user_id' in session:
+        online_users[session['user_id']] = request.sid
+        emit('friend_status', {'user_id': session['user_id'], 'status': 'online'}, broadcast=True)
+
+@socketio.on('disconnect')
+def on_disconnect():
+    if 'user_id' in session and session['user_id'] in online_users:
+        del online_users[session['user_id']]
+        emit('friend_status', {'user_id': session['user_id'], 'status': 'offline'}, broadcast=True)
+    party = WatchParty.query.filter_by(leader_sid=request.sid).first()
+    if party:
+        emit('status', {'msg': f'The party leader ({party.leader.username}) has disconnected.'}, room=party.room_code)
+        db.session.delete(party)
+        db.session.commit()
 @socketio.on('join')
 def on_join(data):
     room_code = data['room_code']
@@ -336,7 +322,7 @@ def on_join(data):
     join_room(room_code)
     party = WatchParty.query.filter_by(room_code=room_code).first()
     leader_sid = None
-    if not party: # First person to join becomes the leader
+    if not party:
         party_info = session.get('party_info')
         new_party = WatchParty(room_code=room_code, leader_id=session['user_id'], leader_sid=request.sid, video_title=party_info['video_title'], video_url=party_info['video_url'])
         db.session.add(new_party)
@@ -344,24 +330,39 @@ def on_join(data):
         leader_sid = request.sid
     else:
         leader_sid = party.leader_sid
-    emit('status', {'msg': f'{username} has joined the room.', 'leader_sid': leader_sid}, room=room_code)
+    emit('status', {'msg': f'{username} has joined.', 'leader_sid': leader_sid}, room=room_code)
 @socketio.on('player_event')
 def handle_player_event(data):
     room_code = data['room_code']
     party = WatchParty.query.filter_by(room_code=room_code).first()
-    if party and party.leader_sid == request.sid: # Only leader can control
+    if party and party.leader_sid == request.sid:
         emit('player_control', data, room=room_code, include_self=False)
 @socketio.on('chat_message')
 def handle_chat_message(data):
     room_code = data['room_code']
     emit('new_chat_message', {'username': session.get('username'), 'message': data['message']}, room=room_code)
-@socketio.on('disconnect')
-def on_disconnect():
-    party = WatchParty.query.filter_by(leader_sid=request.sid).first()
-    if party:
-        emit('status', {'msg': f'The party leader ({party.leader.username}) has disconnected. The party has ended.'}, room=party.room_code)
-        db.session.delete(party)
-        db.session.commit()
+
+# --- New WebRTC Signaling Handlers ---
+@socketio.on('call_user')
+def call_user(data):
+    callee_id = data['callee_id']
+    if callee_id in online_users:
+        callee_sid = online_users[callee_id]
+        caller_info = {'sid': request.sid, 'username': session.get('username'), 'offer': data['offer']}
+        emit('incoming_call', caller_info, room=callee_sid)
+
+@socketio.on('make_answer')
+def make_answer(data):
+    caller_sid = data['caller_sid']
+    answer = data['answer']
+    emit('answer_made', {'answer': answer}, room=caller_sid)
+
+@socketio.on('ice_candidate')
+def ice_candidate(data):
+    target_sid = data['target_sid']
+    emit('ice_candidate', {'candidate': data['candidate']}, room=target_sid)
+
+# --- (Admin & Master-Only Routes/Actions remain the same) ---
 @app.route("/vault")
 @master_required
 def vault():
@@ -378,14 +379,12 @@ def add_password():
     new_password = Passwords(name=request.form['name'], encrypted_password=encrypt_data(request.form['password']))
     db.session.add(new_password)
     db.session.commit()
-    flash(f"Password for '{request.form['name']}' added.", "success")
     return redirect(url_for("vault"))
 @app.route("/vault/delete/<int:id>", methods=["POST"])
 @master_required
 def delete_password(id):
     db.session.delete(Passwords.query.get_or_404(id))
     db.session.commit()
-    flash("Password deleted.", "success")
     return redirect(url_for("vault"))
 @app.route("/upload/file", methods=["POST"])
 @master_required
@@ -395,7 +394,7 @@ def upload_file():
     if file.filename == '': return jsonify({"error": "No selected file"}), 400
     filename = secure_filename(file.filename)
     file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-    return jsonify({"success": f"File '{filename}' uploaded"}), 200
+    return jsonify({"success": f"File '{filename}' uploaded"})
 @app.route("/download/file/<filename>")
 def download_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
@@ -403,42 +402,36 @@ def download_file(filename):
 @master_required
 def delete_file(filename):
     os.remove(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-    flash(f"File '{filename}' deleted.", "success")
     return redirect(url_for("files"))
 @app.route("/videos/add", methods=["POST"])
 @master_required
 def add_video():
     db.session.add(Videos(title=request.form['title'], url=request.form['url']))
     db.session.commit()
-    flash(f"Video '{request.form['title']}' added.", "success")
     return redirect(url_for("videos"))
 @app.route("/videos/delete/<int:id>", methods=["POST"])
 @master_required
 def delete_video(id):
     db.session.delete(Videos.query.get_or_404(id))
     db.session.commit()
-    flash("Video deleted.", "success")
     return redirect(url_for("videos"))
 @app.route("/anime/series/add", methods=["POST"])
 @master_required
 def add_anime_series():
     db.session.add(AnimeSeries(title=request.form['title'], image_url=request.form['image_url']))
     db.session.commit()
-    flash(f"Series '{request.form['title']}' added.", "success")
     return redirect(url_for("anime"))
 @app.route("/anime/series/delete/<int:id>", methods=["POST"])
 @master_required
 def delete_anime_series(id):
     db.session.delete(AnimeSeries.query.get_or_404(id))
     db.session.commit()
-    flash("Series and all its episodes deleted.", "success")
     return redirect(url_for("anime"))
 @app.route("/anime/episode/add/<int:series_id>", methods=["POST"])
 @master_required
 def add_anime_episode(series_id):
     db.session.add(AnimeEpisodes(title=request.form['title'], url=request.form['url'], series_id=series_id))
     db.session.commit()
-    flash(f"Episode '{request.form['title']}' added.", "success")
     return redirect(url_for("anime_series_details", series_id=series_id))
 @app.route("/anime/episode/delete/<int:id>", methods=["POST"])
 @master_required
@@ -447,7 +440,6 @@ def delete_anime_episode(id):
     series_id = episode.series_id
     db.session.delete(episode)
     db.session.commit()
-    flash("Episode deleted.", "success")
     return redirect(url_for("anime_series_details", series_id=series_id))
 
 # --- Create database and admin user if they don't exist ---
