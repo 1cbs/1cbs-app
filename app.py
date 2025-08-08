@@ -205,6 +205,20 @@ def friends():
     pending_requests = User.query.join(Friendship, Friendship.requester_id == User.id).filter(Friendship.addressee_id == user_id, Friendship.status == 'pending').all()
     return render_template("friends.html", friends=friends, pending_requests=pending_requests)
 
+# --- New Calling Route ---
+@app.route("/calling")
+@login_required
+def calling():
+    user_id = session['user_id']
+    friends_query = Friendship.query.filter(Friendship.status == 'accepted').filter(or_(Friendship.requester_id == user_id, Friendship.addressee_id == user_id)).all()
+    friends = []
+    for f in friends_query:
+        friend_id = f.addressee_id if f.requester_id == user_id else f.requester_id
+        friend_user = User.query.get(friend_id)
+        is_online = friend_id in online_users
+        friends.append({'user': friend_user, 'is_online': is_online})
+    return render_template("calling.html", friends=friends)
+
 @app.route("/friends/add/<int:user_id>", methods=["POST"])
 @login_required
 def add_friend(user_id):
