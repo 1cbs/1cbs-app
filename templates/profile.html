@@ -1,1 +1,75 @@
+{% extends "base.html" %}
 
+{% block title %}{{ user.username }}'s Profile{% endblock %}
+
+{% block content %}
+<style>
+    .profile-header {
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+        margin-bottom: 2rem;
+        padding: 2rem;
+        background: var(--card-background);
+        border: 1px solid var(--border-color);
+        border-radius: 15px;
+    }
+    .profile-pic {
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid var(--primary-color);
+    }
+    .profile-info h2 {
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .profile-info p {
+        color: var(--text-secondary);
+        font-style: italic;
+    }
+    .profile-actions {
+        margin-top: 1.5rem;
+    }
+</style>
+
+<div class="profile-header">
+    <img class="profile-pic" src="{{ user.profile.profile_pic_url or 'https://placehold.co/150x150/0c0c1e/e0e0e0?text=' ~ user.username[0]|upper }}" alt="{{ user.username }}'s profile picture">
+    <div class="profile-info">
+        <h2>{{ user.username }}</h2>
+        <p>"{{ user.profile.bio or 'This user has not written a bio yet.' }}"</p>
+        <div class="profile-actions">
+            {% if user.id == session['user_id'] %}
+                <a href="{{ url_for('edit_profile') }}" class="btn-primary">Edit Profile</a>
+            {% else %}
+                {% if friendship_status == 'not_friends' %}
+                    <form action="{{ url_for('add_friend', user_id=user.id) }}" method="POST">
+                        <button type="submit" class="btn-primary"><i class="fas fa-user-plus"></i> Add Friend</button>
+                    </form>
+                {% elif friendship_status == 'request_sent' %}
+                    <button class="btn-secondary" disabled>Request Sent</button>
+                {% elif friendship_status == 'request_received' %}
+                    <form action="{{ url_for('accept_friend', requester_id=user.id) }}" method="POST" style="display: inline-block;">
+                        <button type="submit" class="btn-primary">Accept Request</button>
+                    </form>
+                {% elif friendship_status == 'friends' %}
+                     <form action="{{ url_for('remove_friend', user_id=user.id) }}" method="POST" style="display: inline-block;">
+                        <button type="submit" class="btn-secondary">Remove Friend</button>
+                    </form>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Placeholder for other profile content, like favorite anime or watch history -->
+<div class="card glass-effect">
+    <div class="card-header">
+        <h3>Activity</h3>
+    </div>
+    <div class="card-content">
+        <p>User activity and favorites will be displayed here in a future update.</p>
+    </div>
+</div>
+{% endblock %}
