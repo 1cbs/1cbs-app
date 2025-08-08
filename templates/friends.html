@@ -1,1 +1,118 @@
+{% extends "base.html" %}
 
+{% block title %}Friends{% endblock %}
+
+{% block content %}
+<style>
+    .friends-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 2rem;
+    }
+    @media (min-width: 992px) {
+        .friends-layout {
+            grid-template-columns: 2fr 1fr;
+        }
+    }
+    .user-list-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        background: rgba(0,0,0,0.2);
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+    .user-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    .user-info img {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+    .user-info a {
+        color: var(--text-color);
+        text-decoration: none;
+        font-weight: bold;
+    }
+    .user-actions form {
+        display: inline-block;
+        margin-left: 0.5rem;
+    }
+</style>
+
+<div class="friends-layout">
+    <!-- Left Column: Friends and Requests -->
+    <div>
+        <section class="card glass-effect" id="friend-requests" style="margin-bottom: 2rem;">
+            <div class="card-header">
+                <h2><i class="fas fa-user-plus"></i> Friend Requests</h2>
+            </div>
+            <div class="card-content">
+                {% for user in pending_requests %}
+                    <div class="user-list-item">
+                        <div class="user-info">
+                            <img src="{{ user.profile.profile_pic_url or 'https://placehold.co/100x100/0c0c1e/e0e0e0?text=' ~ user.username[0]|upper }}" alt="{{ user.username }}'s profile picture">
+                            <a href="{{ url_for('view_profile', username=user.username) }}">{{ user.username }}</a>
+                        </div>
+                        <div class="user-actions">
+                            <form action="{{ url_for('accept_friend', requester_id=user.id) }}" method="POST">
+                                <button type="submit" class="btn-primary">Accept</button>
+                            </form>
+                            <form action="{{ url_for('remove_friend', user_id=user.id) }}" method="POST">
+                                <button type="submit" class="btn-secondary">Decline</button>
+                            </form>
+                        </div>
+                    </div>
+                {% else %}
+                    <p>You have no pending friend requests.</p>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="card glass-effect" id="friends-list">
+            <div class="card-header">
+                <h2><i class="fas fa-user-friends"></i> Your Friends</h2>
+            </div>
+            <div class="card-content">
+                {% for user in friends %}
+                    <div class="user-list-item">
+                        <div class="user-info">
+                            <img src="{{ user.profile.profile_pic_url or 'https://placehold.co/100x100/0c0c1e/e0e0e0?text=' ~ user.username[0]|upper }}" alt="{{ user.username }}'s profile picture">
+                            <a href="{{ url_for('view_profile', username=user.username) }}">{{ user.username }}</a>
+                        </div>
+                        <div class="user-actions">
+                             <!-- Placeholder for future actions like 'Call' -->
+                        </div>
+                    </div>
+                {% else %}
+                    <p>You haven't added any friends yet.</p>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+
+    <!-- Right Column: Find Users -->
+    <aside>
+        <div class="card glass-effect" id="find-users">
+            <div class="card-header">
+                <h2><i class="fas fa-search"></i> Find Users</h2>
+            </div>
+            <div class="card-content">
+                <form method="GET" action="{{ url_for('friends') }}">
+                    <div class="form-group">
+                        <label for="search_query">Search by username</label>
+                        <input type="search" id="search_query" name="search_query">
+                    </div>
+                    <button type="submit" class="btn-primary" style="width: 100%;">Search</button>
+                </form>
+                <!-- Search results would be displayed here -->
+            </div>
+        </div>
+    </aside>
+</div>
+{% endblock %}
