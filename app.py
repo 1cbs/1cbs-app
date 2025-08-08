@@ -191,10 +191,16 @@ def edit_profile():
         return redirect(url_for('view_profile', username=user.username))
     return render_template("edit_profile.html", user=user)
 
-@app.route("/friends")
+@app.route("/friends", methods=["GET"])
 @login_required
 def friends():
     user_id = session['user_id']
+    search_query = request.args.get('search_query', '')
+    search_results = []
+
+    if search_query:
+        search_results = User.query.filter(User.username.ilike(f'%{search_query}%'), User.id != user_id).all()
+
     friends_query = Friendship.query.filter(Friendship.status == 'accepted').filter(or_(Friendship.requester_id == user_id, Friendship.addressee_id == user_id)).all()
     friends = []
     for f in friends_query:
@@ -202,10 +208,11 @@ def friends():
         friend_user = User.query.get(friend_id)
         is_online = friend_id in online_users
         friends.append({'user': friend_user, 'is_online': is_online})
+        
     pending_requests = User.query.join(Friendship, Friendship.requester_id == User.id).filter(Friendship.addressee_id == user_id, Friendship.status == 'pending').all()
-    return render_template("friends.html", friends=friends, pending_requests=pending_requests)
+    
+    return render_template("friends.html", friends=friends, pending_requests=pending_requests, search_results=search_results, search_query=search_query)
 
-# --- New Calling Route ---
 @app.route("/calling")
 @login_required
 def calling():
