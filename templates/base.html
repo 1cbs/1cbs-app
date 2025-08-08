@@ -22,9 +22,10 @@
             <li><a href="{{ url_for('files') }}"><i class="fas fa-folder"></i> Files</a></li>
             <li><a href="{{ url_for('videos') }}"><i class="fas fa-video"></i> Videos</a></li>
             <li><a href="{{ url_for('anime') }}"><i class="fas fa-tv"></i> Anime</a></li>
-            <!-- Watch Together is for any logged-in user -->
+            <!-- Social links for any logged-in user -->
             {% if 'user_id' in session %}
             <li><a href="{{ url_for('watch_together_lobby') }}"><i class="fas fa-users"></i> Watch Together</a></li>
+            <li><a href="{{ url_for('friends') }}"><i class="fas fa-user-friends"></i> Friends</a></li>
             {% endif %}
         </ul>
     </nav>
@@ -38,7 +39,7 @@
             </div>
             <div class="header-right">
                 {% if 'user_id' in session %}
-                    <span class="username-display">Welcome, {{ session.username }}</span>
+                    <a href="{{ url_for('view_profile', username=session.username) }}" class="username-display">Welcome, {{ session.username }}</a>
                     <a href="{{ url_for('logout') }}" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
                 {% else %}
                     <a href="{{ url_for('login') }}" class="login-btn">Login</a>
@@ -135,7 +136,8 @@
         .login-btn { background: var(--primary-color); }
         .register-btn { background: #555; }
         .logout-btn { background: var(--danger-color); }
-        .username-display { color: var(--text-secondary); }
+        .username-display { color: var(--text-secondary); text-decoration: none; }
+        .username-display:hover { color: var(--primary-color); }
 
         /* Mobile Styles */
         @media (max-width: 768px) {
@@ -143,12 +145,12 @@
             .header-left h1 { font-size: 1.5rem; }
             .header-left, .header-right { gap: 1rem; }
             .main-nav { width: 220px; }
-            .username-display { display: none; } /* Hide username on small screens */
         }
         @media (max-width: 480px) {
             .container { padding: 1rem; }
             .header-left h1 { font-size: 1.2rem; }
             .login-btn, .register-btn, .logout-btn { padding: 0.5rem 0.8rem; font-size: 0.9rem; }
+            .username-display { display: none; }
         }
     </style>
 </body>
