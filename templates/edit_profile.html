@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Profile{% endblock %}
+
+{% block content %}
+<div class="card glass-effect">
+    <div class="card-header">
+        <h2><i class="fas fa-edit"></i> Edit Your Profile</h2>
+    </div>
+    <div class="card-content">
+        <form action="{{ url_for('edit_profile') }}" method="POST">
+            <div class="form-group">
+                <label for="profile_pic_url">Profile Picture URL</label>
+                <input type="url" id="profile_pic_url" name="profile_pic_url" value="{{ user.profile.profile_pic_url or '' }}" placeholder="https://.../image.png">
+            </div>
+            <div class="form-group">
+                <label for="bio">Bio</label>
+                <textarea id="bio" name="bio" rows="4" placeholder="Tell us a little about yourself...">{{ user.profile.bio or '' }}</textarea>
+            </div>
+            <button type="submit" class="btn-primary">Save Changes</button>
+            <a href="{{ url_for('view_profile', username=user.username) }}" class="btn-secondary" style="margin-left: 1rem;">Cancel</a>
+        </form>
+    </div>
+</div>
+
+<style>
+    textarea {
+        width: 100%;
+        padding: 0.8rem;
+        background: rgba(0,0,0,0.3);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        color: var(--text-color);
+        outline: none;
+        resize: vertical;
+    }
+</style>
+{% endblock %}
