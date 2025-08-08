@@ -44,6 +44,7 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     is_master = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
     profile = db.relationship('Profile', backref='user', uselist=False, cascade="all, delete-orphan")
 
 class Profile(db.Model):
