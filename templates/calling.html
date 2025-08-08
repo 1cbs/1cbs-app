@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}Calling{% endblock %}
+
+{% block content %}
+<style>
+    .friends-list {
+        list-style: none;
+    }
+    .friend-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem;
+        background: rgba(0,0,0,0.2);
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+    .friend-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    .friend-info img {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+    .friend-info a {
+        color: var(--text-color);
+        text-decoration: none;
+        font-weight: bold;
+    }
+    .status-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: #6c757d; /* Offline by default */
+        margin-left: 0.5rem;
+    }
+    .status-indicator.online {
+        background-color: #28a745; /* Green for online */
+    }
+    .call-btn {
+        background-color: #28a745;
+    }
+    /* Incoming Call Modal */
+    #incomingCallModal .modal-content {
+        text-align: center;
+    }
+    #incomingCallModal .caller-info {
+        margin: 1.5rem 0;
+    }
+    #incomingCallModal .caller-info img {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        margin-bottom: 1rem;
+    }
+    .call-actions {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+    }
+    .btn-accept { background-color: #28a745; }
+    .btn-decline { background-color: var(--danger-color); }
+</style>
+
+<div class="card glass-effect">
+    <div class="card-header">
+        <h2><i class="fas fa-phone-alt"></i> Voice Calling</h2>
+    </div>
+    <div class="card-content">
+        <ul class="friends-list">
+            {% for friend in friends %}
+            <li class="friend-item" id="friend-{{ friend.user.id }}">
+                <div class="friend-info">
+                    <img src="{{ friend.user.profile.profile_pic_url or 'https://placehold.co/100x100/0c0c1e/e0e0e0?text=' ~ friend.user.username[0]|upper }}" alt="{{ friend.user.username }}'s profile picture">
+                    <div>
+                        <a href="{{ url_for('view_profile', username=friend.user.username) }}">{{ friend.user.username }}</a>
+                        <div class="status-indicator {% if friend.is_online %}online{% endif %}" id="status-{{ friend.user.id }}"></div>
+                    </div>
+                </div>
+                <div class="call-actions">
+                    <button class="btn-primary call-btn" onclick="callUser({{ friend.user.id }})" {% if not friend.is_online %}disabled{% endif %}>
+                        <i class="fas fa-phone"></i> Call
+                    </button>
+                </div>
+            </li>
+            {% else %}
+            <li>You have no friends to call.</li>
+            {% endfor %}
+        </ul>
+        <!-- Audio elements for the call -->
+        <audio id="localAudio" autoplay muted></audio>
+        <audio id="remoteAudio" autoplay></audio>
+    </div>
+</div>
+
+<!-- Incoming Call Modal -->
+<div id="incomingCallModal" class="modal">
+    <div class="modal-content glass-effect">
+        <h2>Incoming Call</h2>
+        <div class="caller-info" id="callerInfo">
+            <!-- Populated by JS -->
+        </div>
+        <div class="call-actions">
+            <button class="btn-primary btn-accept" id="acceptCallBtn">Accept</button>
+            <button class="btn-secondary btn-decline" id="declineCallBtn">Decline</button>
+        </div>
+    </div>
+</div>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const socket = io();
+    let localStream;
+    let peerConnection;
+    let callerSid;
+
+    const localAudio = document.getElementById('localAudio');
+    const remoteAudio = document.getElementById('remoteAudio');
+    const incomingCallModal = document.getElementById('incomingCallModal');
+    const callerInfo = document.getElementById('callerInfo');
+    const acceptCallBtn = document.getElementById('acceptCallBtn');
+    const declineCallBtn = document.getElementById('declineCallBtn');
+    
+    // Configuration for the peer-to-peer connection
+    const configuration = {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' }, // Google's public STUN server
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+    };
+
+    // --- Socket.IO Listeners ---
+    socket.on('connect', () => {
+        console.log('Connected to signaling server');
+    });
+
+    socket.on('friend_status', (data) => {
+        const statusIndicator = document.getElementById(`status-${data.user_id}`);
+        const callButton = document.querySelector(`#friend-${data.user_id} .call-btn`);
+        if (statusIndicator) {
+            if (data.status === 'online') {
+                statusIndicator.classList.add('online');
+                if(callButton) callButton.disabled = false;
+            } else {
+                statusIndicator.classList.remove('online');
+                if(callButton) callButton.disabled = true;
+            }
+        }
+    });
+
+    socket.on('incoming_call', async (data) => {
+        callerSid = data.sid;
+        callerInfo.innerHTML = `<p><strong>${data.username}</strong> is calling you.</p>`;
+        openModal('incomingCallModal');
+
+        acceptCallBtn.onclick = async () => {
+            closeModal('incomingCallModal');
+            await startCall(false); // Start call as the callee
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            socket.emit('make_answer', { caller_sid: callerSid, answer: answer });
+        };
+
+        declineCallBtn.onclick = () => {
+            closeModal('incomingCallModal');
+            // Notify caller that call was declined (optional)
+        };
+    });
+
+    socket.on('answer_made', async (data) => {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    });
+
+    socket.on('ice_candidate', (data) => {
+        if (data.candidate) {
+            peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+        }
+    });
+
+    // --- WebRTC Functions ---
+    async function startCall(isCaller) {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+        localAudio.srcObject = localStream;
+
+        peerConnection = new RTCPeerConnection(configuration);
+
+        localStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, localStream);
+        });
+
+        peerConnection.ontrack = (event) => {
+            remoteAudio.srcObject = event.streams[0];
+        };
+
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                socket.emit('ice_candidate', {
+                    target_sid: callerSid, // This needs to be set for both sides
+                    candidate: event.candidate
+                });
+            }
+        };
+    }
+
+    window.callUser = async function(calleeId) {
+        await startCall(true); // Start call as the caller
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        socket.emit('call_user', { callee_id: calleeId, offer: offer });
+    };
+});
+</script>
+{% endblock %}
