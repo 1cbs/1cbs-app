@@ -38,6 +38,7 @@
         border-radius: 50%;
         background-color: #6c757d; /* Offline by default */
         margin-left: 0.5rem;
+        display: inline-block;
     }
     .status-indicator.online {
         background-color: #28a745; /* Green for online */
@@ -120,6 +121,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let localStream;
     let peerConnection;
     let callerSid;
+    let targetId;
 
     const localAudio = document.getElementById('localAudio');
     const remoteAudio = document.getElementById('remoteAudio');
@@ -132,7 +134,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const configuration = {
         iceServers: [
             { urls: 'stun:stun.l.google.com:19302' }, // Google's public STUN server
-            { urls: 'stun:stun1.l.google.com:19302' }
         ]
     };
 
@@ -186,9 +187,15 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // --- WebRTC Functions ---
-    async function startCall(isCaller) {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-        localAudio.srcObject = localStream;
+    async function startCall() {
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+            localAudio.srcObject = localStream;
+        } catch (error) {
+            console.error("Error accessing media devices.", error);
+            alert("Could not access your microphone. Please check permissions.");
+            return;
+        }
 
         peerConnection = new RTCPeerConnection(configuration);
 
@@ -202,16 +209,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
         peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
+                let target = isCaller ? callerSid : targetId;
                 socket.emit('ice_candidate', {
-                    target_sid: callerSid, // This needs to be set for both sides
+                    target_sid: target,
                     candidate: event.candidate
                 });
             }
         };
     }
 
+    let isCaller = false;
     window.callUser = async function(calleeId) {
-        await startCall(true); // Start call as the caller
+        isCaller = true;
+        targetId = calleeId;
+        await startCall();
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
         socket.emit('call_user', { callee_id: calleeId, offer: offer });
