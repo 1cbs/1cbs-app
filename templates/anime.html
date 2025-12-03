@@ -79,21 +79,12 @@
         {% endif %}
     </div>
     <div class="card-content">
-        <div class="form-row" style="gap: 1rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
-            <input type="text" id="anime-search" placeholder="Search by title" value="{{ search or '' }}" style="flex: 1 1 240px;" list="anime-title-options">
-            <input type="text" id="anime-genre" placeholder="Filter by genre" value="{{ genre_filter or '' }}" style="flex: 1 1 200px;" list="anime-genre-options">
-            <input type="text" id="anime-tag" placeholder="Filter by tags" value="{{ tag_filter or '' }}" style="flex: 1 1 200px;" list="anime-tag-options">
-        </div>
-        <div class="filter-status" id="anime-status" style="margin-bottom: 1rem; font-size: 0.95rem; opacity: 0.85;"></div>
-        <div class="anime-grid" id="anime-grid">
+        <div class="anime-grid">
             {% for series in series_list %}
             <a href="{{ url_for('anime_series_details', series_id=series.id) }}" class="anime-poster">
                 <img src="{{ series.image_url or 'https://placehold.co/400x600/0c0c1e/e0e0e0?text=' ~ series.title|replace(' ', '+') }}" alt="{{ series.title }} Poster" onerror="this.onerror=null;this.src='https://placehold.co/400x600/0c0c1e/e0e0e0?text=Image+Not+Found';" referrerpolicy="no-referrer">
                 <div class="poster-overlay">
                     <h4 class="poster-title">{{ series.title }}</h4>
-                    {% if series.genre %}
-                    <small>{{ series.genre }}</small>
-                    {% endif %}
                 </div>
                 {% if session.get('is_master') %}
                 <div class="poster-actions">
@@ -107,13 +98,8 @@
             <p>No anime series added yet.</p>
             {% endfor %}
         </div>
-        <button id="load-more-anime" class="btn-primary" style="margin-top: 0.75rem; display: none;">Load more</button>
     </div>
 </section>
-
-<datalist id="anime-title-options"></datalist>
-<datalist id="anime-genre-options"></datalist>
-<datalist id="anime-tag-options"></datalist>
 
 <!-- Add Series Modal (Master Only) -->
 {% if session.get('is_master') %}
@@ -130,164 +116,9 @@
                 <label for="series-image-url">Poster Image URL</label>
                 <input type="url" id="series-image-url" name="image_url" placeholder="https://.../poster.jpg">
             </div>
-            <div class="form-group">
-                <label for="series-genre">Genre</label>
-                <input type="text" id="series-genre" name="genre" placeholder="e.g. shonen, drama" list="anime-genre-create-options">
-            </div>
-            <div class="form-group">
-                <label for="series-tags">Tags (comma separated)</label>
-                <input type="text" id="series-tags" name="tags" placeholder="e.g. adventure, pirates" list="anime-tag-create-options">
-            </div>
             <button type="submit" class="btn-primary">Save Series</button>
         </form>
     </div>
 </div>
-<datalist id="anime-genre-create-options"></datalist>
-<datalist id="anime-tag-create-options"></datalist>
 {% endif %}
-<script>
-    const animeSearchInput = document.getElementById('anime-search');
-    const animeGenreInput = document.getElementById('anime-genre');
-    const animeTagInput = document.getElementById('anime-tag');
-    const animeGrid = document.getElementById('anime-grid');
-    const animeStatus = document.getElementById('anime-status');
-    const loadMoreAnimeBtn = document.getElementById('load-more-anime');
-    const animeTitleOptions = document.getElementById('anime-title-options');
-    const animeGenreOptions = document.getElementById('anime-genre-options');
-    const animeTagOptions = document.getElementById('anime-tag-options');
-    const animeGenreCreateOptions = document.getElementById('anime-genre-create-options');
-    const animeTagCreateOptions = document.getElementById('anime-tag-create-options');
-    const initialSeries = {{ series_list | tojson }};
-    let animeOffset = {{ series_list|length }};
-    let animeTotal = {{ total_count }};
-    const animeLimit = {{ limit }};
-    const isMaster = {{ 'true' if session.get('is_master') else 'false' }};
-    const deleteAnimeUrlTemplate = "{{ url_for('delete_anime_series', id=0)[:-1] }}";
-
-    function debounce(fn, delay = 300) {
-        let timer;
-        return (...args) => {
-            clearTimeout(timer);
-            timer = setTimeout(() => fn(...args), delay);
-        };
-    }
-
-    function renderAnime(seriesList, append = false) {
-        if (!append) {
-            animeGrid.innerHTML = '';
-        }
-
-        if (!seriesList.length && !append) {
-            animeGrid.innerHTML = '<p>No anime series added yet.</p>';
-            updateAnimeStatus(0);
-            return;
-        }
-
-        const cards = seriesList.map(series => {
-            const posterUrl = series.image_url || `https://placehold.co/400x600/0c0c1e/e0e0e0?text=${encodeURIComponent(series.title)}`;
-            const genre = series.genre ? `<small>${series.genre}</small>` : '';
-            const actions = isMaster ? `
-                <div class="poster-actions">
-                    <form action="${deleteAnimeUrlTemplate}${series.id}" method="POST" onclick="return confirm('Are you sure you want to delete this entire series and all its episodes?'); event.stopPropagation();">
-                        <button type="submit" class="btn-icon btn-delete"><i class="fas fa-trash"></i></button>
-                    </form>
-                </div>` : '';
-
-            return `
-                <a href="/anime/series/${series.id}" class="anime-poster">
-                    <img src="${posterUrl}" alt="${series.title} Poster" referrerpolicy="no-referrer">
-                    <div class="poster-overlay">
-                        <h4 class="poster-title">${series.title}</h4>
-                        ${genre}
-                    </div>
-                    ${actions}
-                </a>
-            `;
-        });
-
-        const markup = cards.join('');
-        if (append) {
-            animeGrid.insertAdjacentHTML('beforeend', markup);
-        } else {
-            animeGrid.innerHTML = markup;
-        }
-
-        updateAnimeStatus(animeGrid.querySelectorAll('.anime-poster').length);
-    }
-    function updateAnimeStatus(displayedCount) {
-        const activeFilters = [];
-        if (animeSearchInput.value.trim()) activeFilters.push(`title containing "${animeSearchInput.value.trim()}"`);
-        if (animeGenreInput.value.trim()) activeFilters.push(`genre matching "${animeGenreInput.value.trim()}"`);
-        if (animeTagInput.value.trim()) activeFilters.push(`tags matching "${animeTagInput.value.trim()}"`);
-
-        const filterText = activeFilters.length ? ` for ${activeFilters.join(' and ')}` : '';
-        const totalText = animeTotal === 1 ? '1 series' : `${animeTotal} series`;
-        animeStatus.textContent = `Showing ${displayedCount} of ${totalText}${filterText}.`;
-
-        if (loadMoreAnimeBtn) {
-            loadMoreAnimeBtn.style.display = animeOffset < animeTotal ? 'block' : 'none';
-        }
-    }
-
-    async function loadAnime({ append = false, offsetOverride = null } = {}) {
-        const params = new URLSearchParams({
-            q: animeSearchInput.value.trim(),
-            genre: animeGenreInput.value.trim(),
-            tag: animeTagInput.value.trim(),
-            limit: animeLimit,
-            offset: offsetOverride !== null ? offsetOverride : (append ? animeOffset : 0)
-        });
-
-        try {
-            const response = await fetch(`/anime?${params.toString()}`, {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-
-            if (!response.ok) throw new Error('Request failed');
-
-            const data = await response.json();
-            if (!append) {
-                animeOffset = 0;
-            }
-            renderAnime(data.results, append);
-            animeOffset = data.offset + data.results.length;
-            animeTotal = data.total;
-            updateAnimeStatus(animeGrid.querySelectorAll('.anime-poster').length);
-        } catch (error) {
-            console.error('Failed to load anime', error);
-            animeStatus.textContent = 'Unable to load anime right now. Please try again.';
-            if (loadMoreAnimeBtn) {
-                loadMoreAnimeBtn.style.display = 'none';
-            }
-        }
-    }
-
-    const fetchAnime = debounce(() => loadAnime({ append: false, offsetOverride: 0 }), 350);
-
-    async function hydrateAnimeMeta() {
-        const response = await fetch('/api/anime/meta', { headers: { 'X-Requested-With': 'XMLHttpRequest' }});
-        if (!response.ok) return;
-        const data = await response.json();
-
-        const fillOptions = (datalist, items) => {
-            if (!datalist || !items?.length) return;
-            datalist.innerHTML = items.map(item => `<option value="${item}"></option>`).join('');
-        };
-
-        fillOptions(animeTitleOptions, data.titles);
-        fillOptions(animeGenreOptions, data.genres);
-        fillOptions(animeTagOptions, data.tags);
-        fillOptions(animeGenreCreateOptions, data.genres);
-        fillOptions(animeTagCreateOptions, data.tags);
-    }
-
-    loadMoreAnimeBtn?.addEventListener('click', () => loadAnime({ append: true }));
-    animeSearchInput?.addEventListener('input', fetchAnime);
-    animeGenreInput?.addEventListener('input', fetchAnime);
-    animeTagInput?.addEventListener('input', fetchAnime);
-
-    renderAnime(initialSeries, false);
-    updateAnimeStatus(initialSeries.length);
-    hydrateAnimeMeta();
-</script>
 {% endblock %}

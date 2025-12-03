@@ -12,21 +12,13 @@
         {% endif %}
     </div>
     <div class="card-content">
-        <div class="form-row" style="gap: 1rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
-            <input type="text" id="video-search" placeholder="Search by title" value="{{ search or '' }}" style="flex: 1 1 240px;" list="video-title-options">
-            <input type="text" id="video-tag" placeholder="Filter by tags" value="{{ tag_filter or '' }}" style="flex: 1 1 200px;" list="video-tag-options">
-        </div>
-        <div class="filter-status" id="video-status" style="margin-bottom: 1rem; font-size: 0.95rem; opacity: 0.85;"></div>
-        <ul class="item-list" id="video-list">
+        <ul class="item-list">
             {% for v in videos %}
             <li>
                 <span class="item-name"><i class="fas fa-film"></i> {{ v.title }}</span>
-                {% if v.tags %}
-                <div class="item-tags">{{ v.tags }}</div>
-                {% endif %}
                 <div class="item-actions">
                     <button class="btn-icon" onclick="openModal('videoPlayerModal', '{{ v.url }}')"><i class="fas fa-play"></i></button>
-
+                    
                     <!-- This now correctly checks if ANY user is logged in -->
                     {% if 'user_id' in session %}
                     <form action="{{ url_for('create_watch_party') }}" method="POST" style="display: inline;">
@@ -47,12 +39,8 @@
             <li>No videos added yet.</li>
             {% endfor %}
         </ul>
-        <button id="load-more-videos" class="btn-primary" style="margin-top: 0.75rem; display: none;">Load more</button>
     </div>
 </section>
-
-<datalist id="video-title-options"></datalist>
-<datalist id="video-tag-options"></datalist>
 
 <!-- Add Video Modal (Master Only) -->
 {% if session.get('is_master') %}
@@ -69,161 +57,9 @@
                 <label for="video-url">Direct Video URL</label>
                 <input type="url" id="video-url" name="url" placeholder="https://f005.backblazeb2.com/..." required>
             </div>
-            <div class="form-group">
-                <label for="video-tags">Tags (comma separated)</label>
-                <input type="text" id="video-tags" name="tags" placeholder="e.g. comedy, trailer" list="video-tag-create-options">
-            </div>
             <button type="submit" class="btn-primary">Save Video</button>
         </form>
     </div>
 </div>
-<datalist id="video-tag-create-options"></datalist>
 {% endif %}
-<script>
-    const videoSearchInput = document.getElementById('video-search');
-    const videoTagInput = document.getElementById('video-tag');
-    const videoList = document.getElementById('video-list');
-    const videoStatus = document.getElementById('video-status');
-    const loadMoreVideosBtn = document.getElementById('load-more-videos');
-    const videoTitleOptions = document.getElementById('video-title-options');
-    const videoTagOptions = document.getElementById('video-tag-options');
-    const videoTagCreateOptions = document.getElementById('video-tag-create-options');
-    const initialVideos = {{ videos | tojson }};
-    let videoOffset = {{ videos|length }};
-    let videoTotal = {{ total_count }};
-    const videoLimit = {{ limit }};
-    const isMaster = {{ 'true' if session.get('is_master') else 'false' }};
-    const isLoggedIn = {{ 'true' if 'user_id' in session else 'false' }};
-    const watchPartyUrl = "{{ url_for('create_watch_party') }}";
-    const deleteVideoUrlTemplate = "{{ url_for('delete_video', id=0)[:-1] }}";
-
-    function debounce(fn, delay = 300) {
-        let timer;
-        return (...args) => {
-            clearTimeout(timer);
-            timer = setTimeout(() => fn(...args), delay);
-        };
-    }
-
-    function renderVideos(videos, append = false) {
-        if (!append) {
-            videoList.innerHTML = '';
-        }
-
-        if (!videos.length && !append) {
-            videoList.innerHTML = '<li>No videos added yet.</li>';
-            updateVideoStatus(0);
-            return;
-        }
-
-        const items = videos.map(video => {
-            const tagSection = video.tags ? `<div class="item-tags">${video.tags}</div>` : '';
-            let actions = `<button class="btn-icon" onclick="openModal('videoPlayerModal', '${video.url}')"><i class="fas fa-play"></i></button>`;
-
-            if (isLoggedIn) {
-                actions += `
-                    <form action="${watchPartyUrl}" method="POST" style="display: inline;">
-                        <input type="hidden" name="video_selection" value="video-${video.id}">
-                        <button type="submit" class="btn-icon" title="Start a Watch Party"><i class="fas fa-users"></i></button>
-                    </form>
-                `;
-            }
-
-            if (isMaster) {
-                actions += `
-                    <form action="${deleteVideoUrlTemplate}${video.id}" method="POST" style="display: inline;">
-                        <button type="submit" class="btn-icon btn-delete"><i class="fas fa-trash"></i></button>
-                    </form>
-                `;
-            }
-
-            return `
-                <li>
-                    <span class="item-name"><i class="fas fa-film"></i> ${video.title}</span>
-                    ${tagSection}
-                    <div class="item-actions">${actions}</div>
-                </li>
-            `;
-        });
-
-        const markup = items.join('');
-        if (append) {
-            videoList.insertAdjacentHTML('beforeend', markup);
-        } else {
-            videoList.innerHTML = markup;
-        }
-
-        updateVideoStatus(videoList.querySelectorAll('li').length);
-    }
-    function updateVideoStatus(displayedCount) {
-        const activeFilters = [];
-        if (videoSearchInput.value.trim()) activeFilters.push(`title containing "${videoSearchInput.value.trim()}"`);
-        if (videoTagInput.value.trim()) activeFilters.push(`tags matching "${videoTagInput.value.trim()}"`);
-
-        const filterText = activeFilters.length ? ` for ${activeFilters.join(' and ')}` : '';
-        const totalText = videoTotal === 1 ? '1 video' : `${videoTotal} videos`;
-        videoStatus.textContent = `Showing ${displayedCount} of ${totalText}${filterText}.`;
-
-        if (loadMoreVideosBtn) {
-            loadMoreVideosBtn.style.display = videoOffset < videoTotal ? 'block' : 'none';
-        }
-    }
-
-    async function loadVideos({ append = false, offsetOverride = null } = {}) {
-        const params = new URLSearchParams({
-            q: videoSearchInput.value.trim(),
-            tag: videoTagInput.value.trim(),
-            limit: videoLimit,
-            offset: offsetOverride !== null ? offsetOverride : (append ? videoOffset : 0)
-        });
-
-        try {
-            const response = await fetch(`/videos?${params.toString()}`, {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-
-            if (!response.ok) throw new Error('Request failed');
-
-            const data = await response.json();
-            if (!append) {
-                videoOffset = 0;
-            }
-            renderVideos(data.results, append);
-            videoOffset = data.offset + data.results.length;
-            videoTotal = data.total;
-            updateVideoStatus(videoList.querySelectorAll('li').length);
-        } catch (error) {
-            console.error('Failed to load videos', error);
-            videoStatus.textContent = 'Unable to load videos right now. Please try again.';
-            if (loadMoreVideosBtn) {
-                loadMoreVideosBtn.style.display = 'none';
-            }
-        }
-    }
-
-    const fetchVideos = debounce(() => loadVideos({ append: false, offsetOverride: 0 }), 350);
-
-    async function hydrateVideoMeta() {
-        const response = await fetch('/api/videos/meta', { headers: { 'X-Requested-With': 'XMLHttpRequest' }});
-        if (!response.ok) return;
-        const data = await response.json();
-
-        const fillOptions = (datalist, items) => {
-            if (!datalist || !items?.length) return;
-            datalist.innerHTML = items.map(item => `<option value="${item}"></option>`).join('');
-        };
-
-        fillOptions(videoTitleOptions, data.titles);
-        fillOptions(videoTagOptions, data.tags);
-        fillOptions(videoTagCreateOptions, data.tags);
-    }
-
-    loadMoreVideosBtn?.addEventListener('click', () => loadVideos({ append: true }));
-    videoSearchInput?.addEventListener('input', fetchVideos);
-    videoTagInput?.addEventListener('input', fetchVideos);
-
-    renderVideos(initialVideos, false);
-    updateVideoStatus(initialVideos.length);
-    hydrateVideoMeta();
-</script>
 {% endblock %}
