@@ -65,13 +65,26 @@ class Passwords(db.Model):
     encrypted_password = db.Column(db.String(500), nullable=False)
 class Videos(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(200), nullable=False)
+    title = db.Column(db.String(200), nullable=False, index=True)
     url = db.Column(db.String(500), nullable=False)
+    tags = db.Column(db.String(200), default='', index=True)
+
+    __table_args__ = (
+        db.Index('ix_videos_title_tags', func.lower(title), func.lower(tags)),
+    )
+
+
 class AnimeSeries(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(200), unique=True, nullable=False)
+    title = db.Column(db.String(200), unique=True, nullable=False, index=True)
     image_url = db.Column(db.String(500))
+    genre = db.Column(db.String(100), default='', index=True)
+    tags = db.Column(db.String(200), default='', index=True)
     episodes = db.relationship('AnimeEpisodes', backref='series', lazy=True, cascade="all, delete-orphan")
+
+    __table_args__ = (
+        db.Index('ix_anime_series_title_genre_tags', func.lower(title), func.lower(genre), func.lower(tags)),
+    )
 class AnimeEpisodes(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
@@ -92,6 +105,38 @@ fernet = Fernet(key_str.encode())
 
 def encrypt_data(data): return fernet.encrypt(data.encode()).decode()
 def decrypt_data(encrypted_data): return fernet.decrypt(encrypted_data.encode()).decode()
+
+
+def normalize_csv_field(raw_value):
+    """Normalize comma-separated inputs (tags/genres) by trimming, lowercasing, and deduplicating."""
+    if not raw_value:
+        return ''
+
+    seen = set()
+    normalized_items = []
+    for item in raw_value.split(','):
+        cleaned = item.strip().lower()
+        if cleaned and cleaned not in seen:
+            seen.add(cleaned)
+            normalized_items.append(cleaned)
+
+    return ', '.join(normalized_items)
+
+
+def normalize_single_field(raw_value):
+    return raw_value.strip().lower() if raw_value else ''
+
+
+def safe_positive_int(raw_value, default, max_value=None):
+    try:
+        parsed = int(raw_value)
+    except (TypeError, ValueError):
+        return default
+
+    parsed = max(parsed, 0)
+    if max_value is not None:
+        parsed = min(parsed, max_value)
+    return parsed
 
 # --- User Access & Helper Functions ---
 from functools import wraps
@@ -270,12 +315,115 @@ def files():
     return render_template("files.html", files=file_list)
 @app.route("/videos")
 def videos():
-    video_list = Videos.query.order_by(Videos.title).all()
-    return render_template("videos.html", videos=video_list)
+    search = request.args.get('q', '').strip()
+    tag_filter = request.args.get('tag', '').strip()
+    limit = safe_positive_int(request.args.get('limit', 24), 24, 100)
+    offset = safe_positive_int(request.args.get('offset', 0), 0)
+    base_query = Videos.query
+
+    if search:
+        search_lower = search.lower()
+        base_query = base_query.filter(func.lower(Videos.title).contains(search_lower))
+    if tag_filter:
+        tag_lower = tag_filter.lower()
+        base_query = base_query.filter(func.lower(Videos.tags).contains(tag_lower))
+
+    total_count = base_query.count()
+    video_list = base_query.order_by(Videos.title).offset(offset).limit(limit).all()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({
+            "results": [{"id": v.id, "title": v.title, "url": v.url, "tags": v.tags} for v in video_list],
+            "total": total_count,
+            "offset": offset,
+            "limit": limit
+        })
+
+    return render_template(
+        "videos.html",
+        videos=video_list,
+        search=search,
+        tag_filter=tag_filter,
+        total_count=total_count,
+        limit=limit,
+        offset=offset
+    )
 @app.route("/anime")
 def anime():
-    series_list = AnimeSeries.query.order_by(AnimeSeries.title).all()
-    return render_template("anime.html", series_list=series_list)
+    search = request.args.get('q', '').strip()
+    genre_filter = request.args.get('genre', '').strip()
+    tag_filter = request.args.get('tag', '').strip()
+    limit = safe_positive_int(request.args.get('limit', 24), 24, 100)
+    offset = safe_positive_int(request.args.get('offset', 0), 0)
+    base_query = AnimeSeries.query
+
+    if search:
+        search_lower = search.lower()
+        base_query = base_query.filter(func.lower(AnimeSeries.title).contains(search_lower))
+    if genre_filter:
+        genre_lower = genre_filter.lower()
+        base_query = base_query.filter(func.lower(AnimeSeries.genre).contains(genre_lower))
+    if tag_filter:
+        tag_lower = tag_filter.lower()
+        base_query = base_query.filter(func.lower(AnimeSeries.tags).contains(tag_lower))
+
+    total_count = base_query.count()
+    series_list = base_query.order_by(AnimeSeries.title).offset(offset).limit(limit).all()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({
+            "results": [{"id": s.id, "title": s.title, "image_url": s.image_url, "genre": s.genre, "tags": s.tags} for s in series_list],
+            "total": total_count,
+            "offset": offset,
+            "limit": limit
+        })
+
+    return render_template(
+        "anime.html",
+        series_list=series_list,
+        search=search,
+        genre_filter=genre_filter,
+        tag_filter=tag_filter,
+        total_count=total_count,
+        limit=limit,
+        offset=offset
+    )
+
+
+def _collect_unique_values(model_field):
+    values = set()
+    for (raw_value,) in db.session.query(model_field).filter(model_field.isnot(None), model_field != '').all():
+        for part in raw_value.split(','):
+            cleaned = part.strip().lower()
+            if cleaned:
+                values.add(cleaned)
+    return sorted(values)
+
+
+def _collect_unique_titles(model):
+    seen = {}
+    for (title,) in db.session.query(model.title).filter(model.title.isnot(None), model.title != '').order_by(model.title).all():
+        lowered = title.lower()
+        if lowered not in seen:
+            seen[lowered] = title
+    return list(seen.values())
+
+
+@app.route("/api/videos/meta")
+def videos_meta():
+    return jsonify({
+        "tags": _collect_unique_values(Videos.tags),
+        "titles": _collect_unique_titles(Videos)
+    })
+
+
+@app.route("/api/anime/meta")
+def anime_meta():
+    return jsonify({
+        "tags": _collect_unique_values(AnimeSeries.tags),
+        "genres": _collect_unique_values(AnimeSeries.genre),
+        "titles": _collect_unique_titles(AnimeSeries)
+    })
 @app.route("/anime/series/<int:series_id>")
 def anime_series_details(series_id):
     series = AnimeSeries.query.get_or_404(series_id)
@@ -428,7 +576,13 @@ def delete_file(filename):
 @app.route("/videos/add", methods=["POST"])
 @master_required
 def add_video():
-    db.session.add(Videos(title=request.form['title'], url=request.form['url']))
+    db.session.add(
+        Videos(
+            title=request.form['title'],
+            url=request.form['url'],
+            tags=normalize_csv_field(request.form.get('tags', ''))
+        )
+    )
     db.session.commit()
     return redirect(url_for("videos"))
 @app.route("/videos/delete/<int:id>", methods=["POST"])
@@ -440,7 +594,14 @@ def delete_video(id):
 @app.route("/anime/series/add", methods=["POST"])
 @master_required
 def add_anime_series():
-    db.session.add(AnimeSeries(title=request.form['title'], image_url=request.form['image_url']))
+    db.session.add(
+        AnimeSeries(
+            title=request.form['title'],
+            image_url=request.form['image_url'],
+            genre=normalize_single_field(request.form.get('genre', '')),
+            tags=normalize_csv_field(request.form.get('tags', ''))
+        )
+    )
     db.session.commit()
     return redirect(url_for("anime"))
 @app.route("/anime/series/delete/<int:id>", methods=["POST"])
