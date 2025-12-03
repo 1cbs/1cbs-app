@@ -1,208 +1,75 @@
 {% extends "base.html" %}
 
-{% block title %}Anime Library{% endblock %}
+{% block title %}{{ series.title }}{% endblock %}
 
 {% block content %}
 <style>
-    /* Styles for the Netflix/Crunchyroll UI */
-    .anime-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-        gap: 1.5rem;
+    .series-header {
+        margin-bottom: 2rem;
     }
-    .anime-poster {
-        position: relative;
-        border-radius: 8px;
-        overflow: hidden;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-        background-color: #202030;
-        text-decoration: none; /* Remove underline from links */
-        color: white; /* Ensure text is visible */
-    }
-    .anime-poster:hover {
-        transform: scale(1.05);
-        box-shadow: 0 8px 25px rgba(0, 170, 255, 0.5);
-    }
-    .anime-poster img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        display: block;
-    }
-    .poster-overlay {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%);
-        padding: 2rem 1rem 1rem 1rem;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-end;
-    }
-    .poster-title {
-        color: white;
-        font-weight: bold;
-        margin-bottom: 0.5rem;
-    }
-    .poster-actions {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        opacity: 0;
-        transition: opacity 0.3s ease;
-    }
-    .anime-poster:hover .poster-actions {
-        opacity: 1;
-    }
-    .poster-actions .btn-icon {
-        background: rgba(40, 40, 50, 0.8);
-        color: white;
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1rem;
-    }
-    .poster-actions .btn-icon:hover {
-        background: var(--danger-color);
+    .series-header h2 {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
     }
 </style>
 
-<section class="card glass-effect" id="anime">
-    <div class="card-header">
-        <h2><i class="fas fa-tv"></i> Anime Library</h2>
+<section class="card glass-effect" id="anime-details">
+    <div class="card-header series-header">
+        <div>
+            <a href="{{ url_for('anime') }}" class="btn-icon" style="margin-bottom: 1rem;"><i class="fas fa-arrow-left"></i> Back to Library</a>
+            <h2>{{ series.title }}</h2>
+        </div>
         {% if session.get('is_master') %}
-        <button class="btn-primary" onclick="openModal('addSeriesModal')"><i class="fas fa-plus"></i> Add New Series</button>
+        <button class="btn-primary" onclick="openModal('addEpisodeModal')"><i class="fas fa-plus"></i> Add New Episode</button>
         {% endif %}
     </div>
     <div class="card-content">
-        <div class="form-row" style="gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
-            <input type="text" id="anime-search" placeholder="Search by title" value="{{ search or '' }}" style="flex: 1 1 240px;">
-            <input type="text" id="anime-genre" placeholder="Filter by genre" value="{{ genre_filter or '' }}" style="flex: 1 1 200px;">
-            <input type="text" id="anime-tag" placeholder="Filter by tags" value="{{ tag_filter or '' }}" style="flex: 1 1 200px;">
-        </div>
-        <div class="anime-grid" id="anime-grid">
-            {% for series in series_list %}
-            <a href="{{ url_for('anime_series_details', series_id=series.id) }}" class="anime-poster">
-                <img src="{{ series.image_url or 'https://placehold.co/400x600/0c0c1e/e0e0e0?text=' ~ series.title|replace(' ', '+') }}" alt="{{ series.title }} Poster" onerror="this.onerror=null;this.src='https://placehold.co/400x600/0c0c1e/e0e0e0?text=Image+Not+Found';" referrerpolicy="no-referrer">
-                <div class="poster-overlay">
-                    <h4 class="poster-title">{{ series.title }}</h4>
-                    {% if series.genre %}
-                    <small>{{ series.genre }}</small>
+        <ul class="item-list">
+            {% for episode in episodes %}
+            <li>
+                <span class="item-name"><i class="fas fa-film"></i> {{ episode.title }}</span>
+                <div class="item-actions">
+                    <button class="btn-icon" onclick="openModal('videoPlayerModal', '{{ episode.url }}')"><i class="fas fa-play"></i></button>
+                    
+                    {% if 'user_id' in session %}
+                    <form action="{{ url_for('create_watch_party') }}" method="POST" style="display: inline;">
+                        <input type="hidden" name="video_selection" value="anime-{{ episode.id }}">
+                        <button type="submit" class="btn-icon" title="Start a Watch Party"><i class="fas fa-users"></i></button>
+                    </form>
                     {% endif %}
-                </div>
-                {% if session.get('is_master') %}
-                <div class="poster-actions">
-                    <form action="{{ url_for('delete_anime_series', id=series.id) }}" method="POST" onclick="return confirm('Are you sure you want to delete this entire series and all its episodes?'); event.stopPropagation();">
+
+                    {% if session.get('is_master') %}
+                    <form action="{{ url_for('delete_anime_episode', id=episode.id) }}" method="POST" style="display: inline;">
                         <button type="submit" class="btn-icon btn-delete"><i class="fas fa-trash"></i></button>
                     </form>
+                    {% endif %}
                 </div>
-                {% endif %}
-            </a>
+            </li>
             {% else %}
-            <p>No anime series added yet.</p>
+            <li>No episodes added to this series yet.</li>
             {% endfor %}
-        </div>
+        </ul>
     </div>
 </section>
 
-<!-- Add Series Modal (Master Only) -->
+<!-- Add Episode Modal (Master Only) -->
 {% if session.get('is_master') %}
-<div id="addSeriesModal" class="modal">
+<div id="addEpisodeModal" class="modal">
     <div class="modal-content glass-effect">
-        <span class="close-btn" onclick="closeModal('addSeriesModal')">&times;</span>
-        <h2>Add New Anime Series</h2>
-        <form action="{{ url_for('add_anime_series') }}" method="POST">
+        <span class="close-btn" onclick="closeModal('addEpisodeModal')">&times;</span>
+        <h2>Add Episode to "{{ series.title }}"</h2>
+        <form action="{{ url_for('add_anime_episode', series_id=series.id) }}" method="POST">
             <div class="form-group">
-                <label for="series-title">Series Title (e.g., One Piece)</label>
-                <input type="text" id="series-title" name="title" required>
+                <label for="episode-title">Episode Title (e.g., Episode 1, The Journey Begins)</label>
+                <input type="text" id="episode-title" name="title" required>
             </div>
             <div class="form-group">
-                <label for="series-image-url">Poster Image URL</label>
-                <input type="url" id="series-image-url" name="image_url" placeholder="https://.../poster.jpg">
+                <label for="episode-url">Direct Video URL</label>
+                <input type="url" id="episode-url" name="url" placeholder="https://f005.backblazeb2.com/..." required>
             </div>
-            <div class="form-group">
-                <label for="series-genre">Genre</label>
-                <input type="text" id="series-genre" name="genre" placeholder="e.g. shonen, drama">
-            </div>
-            <div class="form-group">
-                <label for="series-tags">Tags (comma separated)</label>
-                <input type="text" id="series-tags" name="tags" placeholder="e.g. adventure, pirates">
-            </div>
-            <button type="submit" class="btn-primary">Save Series</button>
+            <button type="submit" class="btn-primary">Save Episode</button>
         </form>
     </div>
 </div>
 {% endif %}
-<script>
-    const animeSearchInput = document.getElementById('anime-search');
-    const animeGenreInput = document.getElementById('anime-genre');
-    const animeTagInput = document.getElementById('anime-tag');
-    const animeGrid = document.getElementById('anime-grid');
-    const isMaster = {{ 'true' if session.get('is_master') else 'false' }};
-    const deleteAnimeUrlTemplate = "{{ url_for('delete_anime_series', id=0)[:-1] }}";
-
-    function debounce(fn, delay = 300) {
-        let timer;
-        return (...args) => {
-            clearTimeout(timer);
-            timer = setTimeout(() => fn(...args), delay);
-        };
-    }
-
-    function renderAnime(seriesList) {
-        if (!seriesList.length) {
-            animeGrid.innerHTML = '<p>No anime series added yet.</p>';
-            return;
-        }
-
-        const cards = seriesList.map(series => {
-            const posterUrl = series.image_url || `https://placehold.co/400x600/0c0c1e/e0e0e0?text=${encodeURIComponent(series.title)}`;
-            const genre = series.genre ? `<small>${series.genre}</small>` : '';
-            const actions = isMaster ? `
-                <div class="poster-actions">
-                    <form action="${deleteAnimeUrlTemplate}${series.id}" method="POST" onclick="return confirm('Are you sure you want to delete this entire series and all its episodes?'); event.stopPropagation();">
-                        <button type="submit" class="btn-icon btn-delete"><i class="fas fa-trash"></i></button>
-                    </form>
-                </div>` : '';
-
-            return `
-                <a href="/anime/series/${series.id}" class="anime-poster">
-                    <img src="${posterUrl}" alt="${series.title} Poster" referrerpolicy="no-referrer">
-                    <div class="poster-overlay">
-                        <h4 class="poster-title">${series.title}</h4>
-                        ${genre}
-                    </div>
-                    ${actions}
-                </a>
-            `;
-        });
-
-        animeGrid.innerHTML = cards.join('');
-    }
-
-    const fetchAnime = debounce(async () => {
-        const params = new URLSearchParams({
-            q: animeSearchInput.value.trim(),
-            genre: animeGenreInput.value.trim(),
-            tag: animeTagInput.value.trim()
-        });
-
-        const response = await fetch(`/anime?${params.toString()}`, {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            renderAnime(data);
-        }
-    }, 350);
-
-    animeSearchInput?.addEventListener('input', fetchAnime);
-    animeGenreInput?.addEventListener('input', fetchAnime);
-    animeTagInput?.addEventListener('input', fetchAnime);
-</script>
 {% endblock %}
