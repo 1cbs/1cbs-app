@@ -12,13 +12,20 @@
         {% endif %}
     </div>
     <div class="card-content">
-        <ul class="item-list">
+        <div class="form-row" style="gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+            <input type="text" id="video-search" placeholder="Search by title" value="{{ search or '' }}" style="flex: 1 1 240px;">
+            <input type="text" id="video-tag" placeholder="Filter by tags" value="{{ tag_filter or '' }}" style="flex: 1 1 200px;">
+        </div>
+        <ul class="item-list" id="video-list">
             {% for v in videos %}
             <li>
                 <span class="item-name"><i class="fas fa-film"></i> {{ v.title }}</span>
+                {% if v.tags %}
+                <div class="item-tags">{{ v.tags }}</div>
+                {% endif %}
                 <div class="item-actions">
                     <button class="btn-icon" onclick="openModal('videoPlayerModal', '{{ v.url }}')"><i class="fas fa-play"></i></button>
-                    
+
                     <!-- This now correctly checks if ANY user is logged in -->
                     {% if 'user_id' in session %}
                     <form action="{{ url_for('create_watch_party') }}" method="POST" style="display: inline;">
@@ -57,9 +64,88 @@
                 <label for="video-url">Direct Video URL</label>
                 <input type="url" id="video-url" name="url" placeholder="https://f005.backblazeb2.com/..." required>
             </div>
+            <div class="form-group">
+                <label for="video-tags">Tags (comma separated)</label>
+                <input type="text" id="video-tags" name="tags" placeholder="e.g. comedy, trailer">
+            </div>
             <button type="submit" class="btn-primary">Save Video</button>
         </form>
     </div>
 </div>
 {% endif %}
+<script>
+    const videoSearchInput = document.getElementById('video-search');
+    const videoTagInput = document.getElementById('video-tag');
+    const videoList = document.getElementById('video-list');
+    const isMaster = {{ 'true' if session.get('is_master') else 'false' }};
+    const isLoggedIn = {{ 'true' if 'user_id' in session else 'false' }};
+    const watchPartyUrl = "{{ url_for('create_watch_party') }}";
+    const deleteVideoUrlTemplate = "{{ url_for('delete_video', id=0)[:-1] }}";
+
+    function debounce(fn, delay = 300) {
+        let timer;
+        return (...args) => {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn(...args), delay);
+        };
+    }
+
+    function renderVideos(videos) {
+        if (!videos.length) {
+            videoList.innerHTML = '<li>No videos added yet.</li>';
+            return;
+        }
+
+        const items = videos.map(video => {
+            const tagSection = video.tags ? `<div class="item-tags">${video.tags}</div>` : '';
+            let actions = `<button class="btn-icon" onclick="openModal('videoPlayerModal', '${video.url}')"><i class="fas fa-play"></i></button>`;
+
+            if (isLoggedIn) {
+                actions += `
+                    <form action="${watchPartyUrl}" method="POST" style="display: inline;">
+                        <input type="hidden" name="video_selection" value="video-${video.id}">
+                        <button type="submit" class="btn-icon" title="Start a Watch Party"><i class="fas fa-users"></i></button>
+                    </form>
+                `;
+            }
+
+            if (isMaster) {
+                actions += `
+                    <form action="${deleteVideoUrlTemplate}${video.id}" method="POST" style="display: inline;">
+                        <button type="submit" class="btn-icon btn-delete"><i class="fas fa-trash"></i></button>
+                    </form>
+                `;
+            }
+
+            return `
+                <li>
+                    <span class="item-name"><i class="fas fa-film"></i> ${video.title}</span>
+                    ${tagSection}
+                    <div class="item-actions">${actions}</div>
+                </li>
+            `;
+        });
+
+        videoList.innerHTML = items.join('');
+    }
+
+    const fetchVideos = debounce(async () => {
+        const params = new URLSearchParams({
+            q: videoSearchInput.value.trim(),
+            tag: videoTagInput.value.trim()
+        });
+
+        const response = await fetch(`/videos?${params.toString()}`, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            renderVideos(data);
+        }
+    }, 350);
+
+    videoSearchInput?.addEventListener('input', fetchVideos);
+    videoTagInput?.addEventListener('input', fetchVideos);
+</script>
 {% endblock %}
