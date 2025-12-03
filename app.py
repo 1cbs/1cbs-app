@@ -400,11 +400,20 @@ def _collect_unique_values(model_field):
     return sorted(values)
 
 
+def _collect_unique_titles(model):
+    seen = {}
+    for (title,) in db.session.query(model.title).filter(model.title.isnot(None), model.title != '').order_by(model.title).all():
+        lowered = title.lower()
+        if lowered not in seen:
+            seen[lowered] = title
+    return list(seen.values())
+
+
 @app.route("/api/videos/meta")
 def videos_meta():
     return jsonify({
         "tags": _collect_unique_values(Videos.tags),
-        "titles": [title for (title,) in db.session.query(Videos.title).order_by(Videos.title).all()]
+        "titles": _collect_unique_titles(Videos)
     })
 
 
@@ -413,7 +422,7 @@ def anime_meta():
     return jsonify({
         "tags": _collect_unique_values(AnimeSeries.tags),
         "genres": _collect_unique_values(AnimeSeries.genre),
-        "titles": [title for (title,) in db.session.query(AnimeSeries.title).order_by(AnimeSeries.title).all()]
+        "titles": _collect_unique_titles(AnimeSeries)
     })
 @app.route("/anime/series/<int:series_id>")
 def anime_series_details(series_id):
