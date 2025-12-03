@@ -177,11 +177,13 @@
             offset: offsetOverride !== null ? offsetOverride : (append ? videoOffset : 0)
         });
 
-        const response = await fetch(`/videos?${params.toString()}`, {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        });
+        try {
+            const response = await fetch(`/videos?${params.toString()}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
 
-        if (response.ok) {
+            if (!response.ok) throw new Error('Request failed');
+
             const data = await response.json();
             if (!append) {
                 videoOffset = 0;
@@ -190,6 +192,12 @@
             videoOffset = data.offset + data.results.length;
             videoTotal = data.total;
             updateVideoStatus(videoList.querySelectorAll('li').length);
+        } catch (error) {
+            console.error('Failed to load videos', error);
+            videoStatus.textContent = 'Unable to load videos right now. Please try again.';
+            if (loadMoreVideosBtn) {
+                loadMoreVideosBtn.style.display = 'none';
+            }
         }
     }
 

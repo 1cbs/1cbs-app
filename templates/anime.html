@@ -238,11 +238,13 @@
             offset: offsetOverride !== null ? offsetOverride : (append ? animeOffset : 0)
         });
 
-        const response = await fetch(`/anime?${params.toString()}`, {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        });
+        try {
+            const response = await fetch(`/anime?${params.toString()}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
 
-        if (response.ok) {
+            if (!response.ok) throw new Error('Request failed');
+
             const data = await response.json();
             if (!append) {
                 animeOffset = 0;
@@ -251,6 +253,12 @@
             animeOffset = data.offset + data.results.length;
             animeTotal = data.total;
             updateAnimeStatus(animeGrid.querySelectorAll('.anime-poster').length);
+        } catch (error) {
+            console.error('Failed to load anime', error);
+            animeStatus.textContent = 'Unable to load anime right now. Please try again.';
+            if (loadMoreAnimeBtn) {
+                loadMoreAnimeBtn.style.display = 'none';
+            }
         }
     }
 
