@@ -1,137 +1,38 @@
 {% extends "base.html" %}
 
-{% block title %}Friends{% endblock %}
+{% block title %}File Manager{% endblock %}
 
 {% block content %}
-<style>
-    .friends-layout {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 2rem;
-    }
-    @media (min-width: 992px) {
-        .friends-layout {
-            grid-template-columns: 2fr 1fr;
-        }
-    }
-    .user-list-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 1rem;
-        background: rgba(0,0,0,0.2);
-        border-radius: 8px;
-        margin-bottom: 1rem;
-    }
-    .user-info {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-    }
-    .user-info img {
-        width: 50px;
-        height: 50px;
-        border-radius: 50%;
-        object-fit: cover;
-    }
-    .user-info a {
-        color: var(--text-color);
-        text-decoration: none;
-        font-weight: bold;
-    }
-    .user-actions form {
-        display: inline-block;
-        margin-left: 0.5rem;
-    }
-    .search-results-container {
-        margin-top: 2rem;
-    }
-</style>
-
-<div class="friends-layout">
-    <!-- Left Column: Friends and Requests -->
-    <div>
-        <section class="card glass-effect" id="friend-requests" style="margin-bottom: 2rem;">
-            <div class="card-header">
-                <h2><i class="fas fa-user-plus"></i> Friend Requests</h2>
-            </div>
-            <div class="card-content">
-                {% for user in pending_requests %}
-                    <div class="user-list-item">
-                        <div class="user-info">
-                            <img src="{{ user.profile.profile_pic_url or 'https://placehold.co/100x100/0c0c1e/e0e0e0?text=' ~ user.username[0]|upper }}" alt="{{ user.username }}'s profile picture">
-                            <a href="{{ url_for('view_profile', username=user.username) }}">{{ user.username }}</a>
-                        </div>
-                        <div class="user-actions">
-                            <form action="{{ url_for('accept_friend', requester_id=user.id) }}" method="POST">
-                                <button type="submit" class="btn-primary">Accept</button>
-                            </form>
-                            <form action="{{ url_for('remove_friend', user_id=user.id) }}" method="POST">
-                                <button type="submit" class="btn-secondary">Decline</button>
-                            </form>
-                        </div>
-                    </div>
-                {% else %}
-                    <p>You have no pending friend requests.</p>
-                {% endfor %}
-            </div>
-        </section>
-
-        <section class="card glass-effect" id="friends-list">
-            <div class="card-header">
-                <h2><i class="fas fa-user-friends"></i> Your Friends</h2>
-            </div>
-            <div class="card-content">
-                {% for friend in friends %}
-                    <div class="user-list-item">
-                        <div class="user-info">
-                            <img src="{{ friend.user.profile.profile_pic_url or 'https://placehold.co/100x100/0c0c1e/e0e0e0?text=' ~ friend.user.username[0]|upper }}" alt="{{ friend.user.username }}'s profile picture">
-                            <a href="{{ url_for('view_profile', username=friend.user.username) }}">{{ friend.user.username }}</a>
-                        </div>
-                    </div>
-                {% else %}
-                    <p>You haven't added any friends yet.</p>
-                {% endfor %}
-            </div>
-        </section>
+<section class="card glass-effect" id="files">
+    <div class="card-header">
+        <h2><i class="fas fa-folder"></i> File Manager</h2>
     </div>
-
-    <!-- Right Column: Find Users -->
-    <aside>
-        <div class="card glass-effect" id="find-users">
-            <div class="card-header">
-                <h2><i class="fas fa-search"></i> Find Users</h2>
-            </div>
-            <div class="card-content">
-                <form method="GET" action="{{ url_for('friends') }}">
-                    <div class="form-group">
-                        <label for="search_query">Search by username</label>
-                        <input type="search" id="search_query" name="search_query" value="{{ search_query or '' }}">
-                    </div>
-                    <button type="submit" class="btn-primary" style="width: 100%;">Search</button>
-                </form>
-
-                {% if search_query %}
-                <div class="search-results-container">
-                    <h4>Search Results for "{{ search_query }}"</h4>
-                    <hr style="margin: 1rem 0; border-color: var(--border-color);">
-                    {% for user in search_results %}
-                        <div class="user-list-item">
-                            <div class="user-info">
-                                <img src="{{ user.profile.profile_pic_url or 'https://placehold.co/100x100/0c0c1e/e0e0e0?text=' ~ user.username[0]|upper }}" alt="{{ user.username }}'s profile picture">
-                                <div>
-                                    <a href="{{ url_for('view_profile', username=user.username) }}">{{ user.username }}</a>
-                                    <small style="color: var(--text-secondary); display: block;">Joined: {{ user.created_at.strftime('%b %d, %Y') }}</small>
-                                </div>
-                            </div>
-                        </div>
-                    {% else %}
-                        <p>No users found.</p>
-                    {% endfor %}
-                </div>
-                {% endif %}
-            </div>
+    <div class="card-content">
+        <!-- This now correctly checks if you are the master admin -->
+        {% if session.get('is_master') %}
+        <div id="file-drop-zone" class="drop-zone">
+            <p><i class="fas fa-cloud-upload-alt"></i> Drag & drop files here or click to select</p>
+            <input type="file" id="file-input" data-upload-url="{{ url_for('upload_file') }}" multiple hidden>
         </div>
-    </aside>
-</div>
+        {% endif %}
+        <ul class="item-list">
+            {% for f in files %}
+            <li>
+                <span class="item-name"><i class="fas fa-file-alt"></i> {{ f }}</span>
+                <div class="item-actions">
+                    <a href="{{ url_for('download_file', filename=f) }}" class="btn-icon"><i class="fas fa-download"></i></a>
+                    <!-- This now correctly checks if you are the master admin -->
+                    {% if session.get('is_master') %}
+                    <form action="{{ url_for('delete_file', filename=f) }}" method="POST" style="display: inline;">
+                        <button type="submit" class="btn-icon btn-delete"><i class="fas fa-trash"></i></button>
+                    </form>
+                    {% endif %}
+                </div>
+            </li>
+            {% else %}
+            <li>No files uploaded yet.</li>
+            {% endfor %}
+        </ul>
+    </div>
+</section>
 {% endblock %}
