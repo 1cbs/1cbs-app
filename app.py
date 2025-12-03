@@ -65,26 +65,13 @@ class Passwords(db.Model):
     encrypted_password = db.Column(db.String(500), nullable=False)
 class Videos(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(200), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False)
     url = db.Column(db.String(500), nullable=False)
-    tags = db.Column(db.String(200), default='', index=True)
-
-    __table_args__ = (
-        db.Index('ix_videos_title_tags', func.lower(title), func.lower(tags)),
-    )
-
-
 class AnimeSeries(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(200), unique=True, nullable=False, index=True)
+    title = db.Column(db.String(200), unique=True, nullable=False)
     image_url = db.Column(db.String(500))
-    genre = db.Column(db.String(100), default='', index=True)
-    tags = db.Column(db.String(200), default='', index=True)
     episodes = db.relationship('AnimeEpisodes', backref='series', lazy=True, cascade="all, delete-orphan")
-
-    __table_args__ = (
-        db.Index('ix_anime_series_title_genre_tags', func.lower(title), func.lower(genre), func.lower(tags)),
-    )
 class AnimeEpisodes(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
@@ -283,52 +270,12 @@ def files():
     return render_template("files.html", files=file_list)
 @app.route("/videos")
 def videos():
-    search = request.args.get('q', '').strip()
-    tag_filter = request.args.get('tag', '').strip()
-    query = Videos.query
-
-    if search:
-        search_lower = search.lower()
-        query = query.filter(func.lower(Videos.title).contains(search_lower))
-    if tag_filter:
-        tag_lower = tag_filter.lower()
-        query = query.filter(func.lower(Videos.tags).contains(tag_lower))
-
-    video_list = query.order_by(Videos.title).all()
-
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return jsonify([
-            {"id": v.id, "title": v.title, "url": v.url, "tags": v.tags}
-            for v in video_list
-        ])
-
-    return render_template("videos.html", videos=video_list, search=search, tag_filter=tag_filter)
+    video_list = Videos.query.order_by(Videos.title).all()
+    return render_template("videos.html", videos=video_list)
 @app.route("/anime")
 def anime():
-    search = request.args.get('q', '').strip()
-    genre_filter = request.args.get('genre', '').strip()
-    tag_filter = request.args.get('tag', '').strip()
-    query = AnimeSeries.query
-
-    if search:
-        search_lower = search.lower()
-        query = query.filter(func.lower(AnimeSeries.title).contains(search_lower))
-    if genre_filter:
-        genre_lower = genre_filter.lower()
-        query = query.filter(func.lower(AnimeSeries.genre).contains(genre_lower))
-    if tag_filter:
-        tag_lower = tag_filter.lower()
-        query = query.filter(func.lower(AnimeSeries.tags).contains(tag_lower))
-
-    series_list = query.order_by(AnimeSeries.title).all()
-
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return jsonify([
-            {"id": s.id, "title": s.title, "image_url": s.image_url, "genre": s.genre, "tags": s.tags}
-            for s in series_list
-        ])
-
-    return render_template("anime.html", series_list=series_list, search=search, genre_filter=genre_filter, tag_filter=tag_filter)
+    series_list = AnimeSeries.query.order_by(AnimeSeries.title).all()
+    return render_template("anime.html", series_list=series_list)
 @app.route("/anime/series/<int:series_id>")
 def anime_series_details(series_id):
     series = AnimeSeries.query.get_or_404(series_id)
@@ -481,13 +428,7 @@ def delete_file(filename):
 @app.route("/videos/add", methods=["POST"])
 @master_required
 def add_video():
-    db.session.add(
-        Videos(
-            title=request.form['title'],
-            url=request.form['url'],
-            tags=request.form.get('tags', '')
-        )
-    )
+    db.session.add(Videos(title=request.form['title'], url=request.form['url']))
     db.session.commit()
     return redirect(url_for("videos"))
 @app.route("/videos/delete/<int:id>", methods=["POST"])
@@ -499,14 +440,7 @@ def delete_video(id):
 @app.route("/anime/series/add", methods=["POST"])
 @master_required
 def add_anime_series():
-    db.session.add(
-        AnimeSeries(
-            title=request.form['title'],
-            image_url=request.form['image_url'],
-            genre=request.form.get('genre', ''),
-            tags=request.form.get('tags', '')
-        )
-    )
+    db.session.add(AnimeSeries(title=request.form['title'], image_url=request.form['image_url']))
     db.session.commit()
     return redirect(url_for("anime"))
 @app.route("/anime/series/delete/<int:id>", methods=["POST"])
